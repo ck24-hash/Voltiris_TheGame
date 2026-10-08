@@ -1,5 +1,8 @@
 import type { CropId, GameContent } from '@voltiris/content';
-import type { GameState, Plot } from './state';
+import { cropPrice } from './market';
+import { createRng } from './rng';
+import type { GameState, Greenhouse, Plot } from './state';
+import { sell, stockOf, storedUnits } from './storage';
 
 export interface CommandMeta {
   /** UUID, so commands can later be sent to and validated by a server. */
@@ -8,6 +11,7 @@ export interface CommandMeta {
   readonly issuedAt: number;
 }
 
+/** Sows a crop in an empty plot; costs the crop's seeds. */
 export interface PlantCropCommand extends CommandMeta {
   readonly type: 'PlantCrop';
   readonly greenhouseId: string;
@@ -15,14 +19,52 @@ export interface PlantCropCommand extends CommandMeta {
   readonly cropId: CropId;
 }
 
-export type Command = PlantCropCommand;
+/** Irrigates a greenhouse once: raises its water by the care amount. */
+export interface WaterCommand extends CommandMeta {
+  readonly type: 'Water';
+  readonly greenhouseId: string;
+}
+
+/** Feeds a greenhouse once: raises its nutrients (EC) by the care amount. */
+export interface FertilizeCommand extends CommandMeta {
+  readonly type: 'Fertilize';
+  readonly greenhouseId: string;
+}
+
+/** Picks a ready crop and puts the harvest in storage. */
+export interface HarvestCropCommand extends CommandMeta {
+  readonly type: 'HarvestCrop';
+  readonly greenhouseId: string;
+  readonly plotId: string;
+}
+
+/** Sells units of a crop from storage at today's market price. */
+export interface SellCropCommand extends CommandMeta {
+  readonly type: 'SellCrop';
+  readonly cropId: CropId;
+  readonly units: number;
+}
+
+export type Command =
+  | PlantCropCommand
+  | WaterCommand
+  | FertilizeCommand
+  | HarvestCropCommand
+  | SellCropCommand;
 
 export type CommandErrorCode =
   | 'UNKNOWN_COMMAND'
   | 'GREENHOUSE_NOT_FOUND'
   | 'PLOT_NOT_FOUND'
   | 'PLOT_OCCUPIED'
-  | 'UNKNOWN_CROP';
+  | 'PLOT_EMPTY'
+  | 'NOT_READY'
+  | 'UNKNOWN_CROP'
+  | 'NOT_ENOUGH_MONEY'
+  | 'ALREADY_FULL'
+  | 'STORAGE_FULL'
+  | 'INVALID_AMOUNT'
+  | 'NOT_ENOUGH_STOCK';
 
 export interface CommandError {
   readonly code: CommandErrorCode;
@@ -46,6 +88,14 @@ export function applyCommand(
   switch (command.type) {
     case 'PlantCrop':
       return plantCrop(state, command, content);
+    case 'Water':
+      return topUp(state, command.greenhouseId, 'water', content);
+    case 'Fertilize':
+      return topUp(state, command.greenhouseId, 'nutrients', content);
+    case 'HarvestCrop':
+      return harvestCrop(state, command, content);
+    case 'SellCrop':
+      return sellCrop(state, command, content);
     default: {
       // Unreachable for typed callers; commands may come from untrusted input later.
       const { type } = command as { type?: unknown };
@@ -59,57 +109,191 @@ function plantCrop(
   command: PlantCropCommand,
   content: GameContent,
 ): CommandResult {
-  // Commands may come from untrusted input later, so check ids at runtime too.
-  if (!Object.hasOwn(content.crops, command.cropId)) {
+  if (!isCrop(command.cropId, content)) {
     return fail('UNKNOWN_CROP', `Unknown crop "${command.cropId}"`);
   }
-  const greenhouse = state.greenhouses.find(
-    (g) => g.id === command.greenhouseId,
-  );
-  if (!greenhouse) {
-    return fail(
-      'GREENHOUSE_NOT_FOUND',
-      `No greenhouse "${command.greenhouseId}"`,
-    );
-  }
-  const plot = greenhouse.plots.find((p) => p.id === command.plotId);
-  if (!plot) {
-    return fail('PLOT_NOT_FOUND', `No plot "${command.plotId}"`);
-  }
+  const found = findPlot(state, command.greenhouseId, command.plotId);
+  if (!found.ok) return found;
+  const { greenhouse, plot } = found;
   if (plot.planting) {
-    return fail('PLOT_OCCUPIED', `Plot "${command.plotId}" is not empty`);
+    return fail('PLOT_OCCUPIED', `Plot "${plot.id}" is not empty`);
+  }
+  const { seedCost } = content.crops[command.cropId];
+  if (state.money < seedCost) {
+    return fail('NOT_ENOUGH_MONEY', `Seeds cost ${seedCost}`);
   }
 
+  const planted = updatePlot(state, greenhouse.id, {
+    ...plot,
+    planting: {
+      status: 'growing',
+      cropId: command.cropId,
+      plantedAtHour: state.clock.gameHour,
+      growthHours: 0,
+      stress: 0,
+    },
+  });
+  return { ok: true, state: { ...planted, money: state.money - seedCost } };
+}
+
+function topUp(
+  state: GameState,
+  greenhouseId: string,
+  resource: 'water' | 'nutrients',
+  content: GameContent,
+): CommandResult {
+  const greenhouse = state.greenhouses.find((g) => g.id === greenhouseId);
+  if (!greenhouse) {
+    return fail('GREENHOUSE_NOT_FOUND', `No greenhouse "${greenhouseId}"`);
+  }
+  const { amount, cost, max } = content.care[resource];
+  const current = greenhouse.climate[resource];
+  if (current >= max) {
+    return fail('ALREADY_FULL', `The ${resource} is already at ${max}`);
+  }
+  if (state.money < cost) {
+    return fail('NOT_ENOUGH_MONEY', `Topping up ${resource} costs ${cost}`);
+  }
+
+  const climate = {
+    ...greenhouse.climate,
+    [resource]: Math.min(max, current + amount),
+  };
   return {
     ok: true,
-    state: updatePlot(state, greenhouse.id, plot.id, {
-      ...plot,
-      planting: {
-        status: 'growing',
-        cropId: command.cropId,
-        plantedAtHour: state.clock.gameHour,
-        growthHours: 0,
-        stress: 0,
-      },
-    }),
+    state: {
+      ...updateGreenhouse(state, { ...greenhouse, climate }),
+      money: state.money - cost,
+    },
   };
 }
 
-function fail(code: CommandErrorCode, message: string): CommandResult {
+function harvestCrop(
+  state: GameState,
+  command: HarvestCropCommand,
+  content: GameContent,
+): CommandResult {
+  const found = findPlot(state, command.greenhouseId, command.plotId);
+  if (!found.ok) return found;
+  const { greenhouse, plot } = found;
+  const { planting } = plot;
+  if (!planting) return fail('PLOT_EMPTY', `Plot "${plot.id}" is empty`);
+  if (planting.status !== 'ready') {
+    return fail('NOT_READY', `Plot "${plot.id}" is still growing`);
+  }
+  const free = content.storage.capacity - storedUnits(state.storage);
+  if (planting.yieldUnits > free) {
+    return fail(
+      'STORAGE_FULL',
+      `Storage has room for ${free}, the harvest is ${planting.yieldUnits}`,
+    );
+  }
+
+  const rng = createRng(state.rng);
+  const lot = {
+    id: rng.uuid(),
+    cropId: planting.cropId,
+    units: planting.yieldUnits,
+    quality: planting.quality,
+    harvestedAtHour: state.clock.gameHour,
+  };
+  const picked = updatePlot(state, greenhouse.id, { ...plot, planting: null });
+  return {
+    ok: true,
+    state: {
+      ...picked,
+      rng: rng.snapshot(),
+      storage: { ...state.storage, lots: [...state.storage.lots, lot] },
+    },
+  };
+}
+
+function sellCrop(
+  state: GameState,
+  command: SellCropCommand,
+  content: GameContent,
+): CommandResult {
+  const { cropId, units } = command;
+  if (!isCrop(cropId, content)) {
+    return fail('UNKNOWN_CROP', `Unknown crop "${cropId}"`);
+  }
+  if (!Number.isInteger(units) || units < 1) {
+    return fail('INVALID_AMOUNT', `Cannot sell ${units} units`);
+  }
+  const stock = stockOf(state.storage, cropId);
+  if (stock < units) {
+    return fail('NOT_ENOUGH_STOCK', `Only ${stock} ${cropId} in storage`);
+  }
+
+  const { gameHour } = state.clock;
+  const price = cropPrice(state.market, cropId, gameHour, content);
+  const sale = sell(
+    state.storage,
+    cropId,
+    units,
+    price,
+    gameHour,
+    content.crops[cropId],
+  );
+  return {
+    ok: true,
+    state: {
+      ...state,
+      money: state.money + sale.revenue,
+      storage: sale.storage,
+    },
+  };
+}
+
+// Commands may come from untrusted input later, so check ids at runtime too.
+function isCrop(cropId: string, content: GameContent): boolean {
+  return Object.hasOwn(content.crops, cropId);
+}
+
+type FoundPlot =
+  | { readonly ok: true; readonly greenhouse: Greenhouse; readonly plot: Plot }
+  | { readonly ok: false; readonly error: CommandError };
+
+function findPlot(
+  state: GameState,
+  greenhouseId: string,
+  plotId: string,
+): FoundPlot {
+  const greenhouse = state.greenhouses.find((g) => g.id === greenhouseId);
+  if (!greenhouse) {
+    return fail('GREENHOUSE_NOT_FOUND', `No greenhouse "${greenhouseId}"`);
+  }
+  const plot = greenhouse.plots.find((p) => p.id === plotId);
+  if (!plot) return fail('PLOT_NOT_FOUND', `No plot "${plotId}"`);
+  return { ok: true, greenhouse, plot };
+}
+
+function fail(
+  code: CommandErrorCode,
+  message: string,
+): { readonly ok: false; readonly error: CommandError } {
   return { ok: false, error: { code, message } };
+}
+
+function updateGreenhouse(state: GameState, greenhouse: Greenhouse): GameState {
+  return {
+    ...state,
+    greenhouses: state.greenhouses.map((g) =>
+      g.id === greenhouse.id ? greenhouse : g,
+    ),
+  };
 }
 
 function updatePlot(
   state: GameState,
   greenhouseId: string,
-  plotId: string,
   plot: Plot,
 ): GameState {
   return {
     ...state,
     greenhouses: state.greenhouses.map((g) =>
       g.id === greenhouseId
-        ? { ...g, plots: g.plots.map((p) => (p.id === plotId ? plot : p)) }
+        ? { ...g, plots: g.plots.map((p) => (p.id === plot.id ? plot : p)) }
         : g,
     ),
   };

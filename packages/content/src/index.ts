@@ -1,12 +1,28 @@
 // Game content as data: crops, equipment, modules, buildings, events.
 
-import { ECONOMY, GROWTH, STARTING_GREENHOUSE, TIME } from './config';
+import {
+  CARE,
+  ECONOMY,
+  GROWTH,
+  MARKET,
+  STARTING_GREENHOUSE,
+  STORAGE,
+  TIME,
+} from './config';
 import { CROPS } from './crops';
 import type { GameContent } from './types';
 
 export * from './types';
 export { CROPS } from './crops';
-export { ECONOMY, GROWTH, STARTING_GREENHOUSE, TIME } from './config';
+export {
+  CARE,
+  ECONOMY,
+  GROWTH,
+  MARKET,
+  STARTING_GREENHOUSE,
+  STORAGE,
+  TIME,
+} from './config';
 
 export const defaultContent: GameContent = {
   time: TIME,
@@ -14,4 +30,7 @@ export const defaultContent: GameContent = {
   startingGreenhouse: STARTING_GREENHOUSE,
   economy: ECONOMY,
   growth: GROWTH,
+  care: CARE,
+  storage: STORAGE,
+  market: MARKET,
 };

@@ -1,18 +1,26 @@
 import type { GameContent } from '@voltiris/content';
 import type { Clock } from './clock';
 import { growPlanting } from './growth';
-import type { GameState, Greenhouse } from './state';
+import { tickMarket } from './market';
+import { createRng } from './rng';
+import type { GameState, Greenhouse, Plot } from './state';
+import { removeSpoiled } from './storage';
 import { ticksDue } from './time';
 
 /** Advances the game by exactly one tick (one in-game hour). */
 export function tick(state: GameState, content: GameContent): GameState {
   const gameHour = state.clock.gameHour + 1;
+  const rng = createRng(state.rng);
+  const market = tickMarket(state.market, rng, content.market);
   return {
     ...state,
     clock: { ...state.clock, gameHour },
+    rng: rng.snapshot(),
     greenhouses: state.greenhouses.map((greenhouse) =>
       tickGreenhouse(greenhouse, gameHour, content),
     ),
+    storage: removeSpoiled(state.storage, gameHour, content),
+    market,
   };
 }
 
@@ -55,26 +63,44 @@ export function maxCatchUpTicks(content: GameContent): number {
   return Math.floor(content.time.maxCatchUpMs / content.time.realMsPerTick);
 }
 
+/**
+ * Grows every crop in the greenhouse by one tick, in the climate at the start
+ * of the tick. Crops then take up water and nutrients in proportion to how
+ * much they grew, so a crop that has stopped growing uses none.
+ */
 function tickGreenhouse(
   greenhouse: Greenhouse,
   gameHour: number,
   content: GameContent,
 ): Greenhouse {
+  let waterUsed = 0;
+  let nutrientsUsed = 0;
+  const plots = greenhouse.plots.map((plot): Plot => {
+    const { planting } = plot;
+    if (planting?.status !== 'growing') return plot;
+    const crop = content.crops[planting.cropId];
+    const next = growPlanting(
+      planting,
+      greenhouse.climate,
+      crop,
+      gameHour,
+      content.growth,
+    );
+    const grown = next.growthHours - planting.growthHours;
+    waterUsed += grown * crop.waterUse;
+    nutrientsUsed += grown * crop.nutrientUse;
+    return { ...plot, planting: next };
+  });
+  if (waterUsed === 0 && nutrientsUsed === 0) return { ...greenhouse, plots };
+
+  const { water, nutrients } = greenhouse.climate;
   return {
     ...greenhouse,
-    plots: greenhouse.plots.map((plot) => {
-      const { planting } = plot;
-      if (planting?.status !== 'growing') return plot;
-      return {
-        ...plot,
-        planting: growPlanting(
-          planting,
-          greenhouse.climate,
-          content.crops[planting.cropId],
-          gameHour,
-          content.growth,
-        ),
-      };
-    }),
+    climate: {
+      ...greenhouse.climate,
+      water: Math.max(0, water - waterUsed),
+      nutrients: Math.max(0, nutrients - nutrientsUsed),
+    },
+    plots,
   };
 }

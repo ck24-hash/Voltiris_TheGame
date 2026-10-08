@@ -1,13 +1,90 @@
 import type { CropDef, CropId } from './types';
 
-// Starting values; balanced in Phase 11.
+// Starting values; balanced in Phase 11. Growth times are set so that, in the
+// starting greenhouse, crops take about 2 min, 7 min, 30 min, 1 h and 2 h of
+// real time. Longer crops earn more per harvest but less per hour, so active
+// play pays and slow crops suit a break.
 export const CROPS: Readonly<Record<CropId, CropDef>> = {
+  // Trays of young shoots, cut after a few days. Easy-going; drinks little.
+  microgreens: {
+    name: 'Microgreens',
+    growthHours: 8,
+    yieldPerPlot: 6,
+    seedCost: 3,
+    basePrice: 1.25,
+    seasonalPrice: { spring: 1, summer: 0.95, autumn: 1, winter: 1.1 },
+    waterUse: 0.05,
+    nutrientUse: 0.002,
+    shelfLifeDays: 4,
+    climate: {
+      temperature: {
+        limitLow: 10,
+        optimalLow: 18,
+        optimalHigh: 24,
+        limitHigh: 32,
+        growthWeight: 1,
+        stressBelow: 1,
+        stressAbove: 1,
+      },
+      humidity: {
+        limitLow: 35,
+        optimalLow: 50,
+        optimalHigh: 80,
+        limitHigh: 95,
+        growthWeight: 0.75,
+        stressBelow: 1,
+        stressAbove: 1,
+      },
+      co2: {
+        limitLow: 100,
+        optimalLow: 350,
+        optimalHigh: 1200,
+        limitHigh: 2500,
+        growthWeight: 0.5,
+        stressBelow: 0.1,
+        stressAbove: 0.2,
+      },
+      light: {
+        limitLow: 20,
+        optimalLow: 100,
+        optimalHigh: 450,
+        limitHigh: 1200,
+        growthWeight: 0.75,
+        stressBelow: 0.5,
+        stressAbove: 0.5,
+      },
+      water: {
+        limitLow: 25,
+        optimalLow: 55,
+        optimalHigh: 85,
+        limitHigh: 98,
+        growthWeight: 1.5,
+        stressBelow: 1.5,
+        stressAbove: 0.5,
+      },
+      nutrients: {
+        limitLow: 0.2,
+        optimalLow: 0.8,
+        optimalHigh: 2.6,
+        limitHigh: 4.5,
+        growthWeight: 0.5,
+        stressBelow: 0.5,
+        stressAbove: 1,
+      },
+    },
+  },
+
   // Likes warm and humid; sensitive to cold and low water.
   cucumber: {
     name: 'Cucumber',
-    growthDays: 20,
-    yieldPerPlot: 14,
-    basePrice: 1.0,
+    growthHours: 24,
+    yieldPerPlot: 12,
+    seedCost: 6,
+    basePrice: 1.8,
+    seasonalPrice: { spring: 1.1, summer: 0.8, autumn: 1, winter: 1.25 },
+    waterUse: 0.12,
+    nutrientUse: 0.004,
+    shelfLifeDays: 8,
     climate: {
       temperature: {
         limitLow: 12,
@@ -66,12 +143,86 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
     },
   },
 
+  // Likes it cool; damp air brings mould, and the berries spoil fast.
+  strawberry: {
+    name: 'Strawberry',
+    growthHours: 112,
+    yieldPerPlot: 8,
+    seedCost: 15,
+    basePrice: 6,
+    seasonalPrice: { spring: 1.2, summer: 0.85, autumn: 1, winter: 1.3 },
+    waterUse: 0.06,
+    nutrientUse: 0.002,
+    shelfLifeDays: 3,
+    climate: {
+      temperature: {
+        limitLow: 6,
+        optimalLow: 16,
+        optimalHigh: 24,
+        limitHigh: 32,
+        growthWeight: 1.25,
+        stressBelow: 1,
+        stressAbove: 1.5,
+      },
+      humidity: {
+        limitLow: 40,
+        optimalLow: 60,
+        optimalHigh: 75,
+        limitHigh: 92,
+        growthWeight: 1,
+        stressBelow: 0.5,
+        stressAbove: 2,
+      },
+      co2: {
+        limitLow: 150,
+        optimalLow: 600,
+        optimalHigh: 1000,
+        limitHigh: 2000,
+        growthWeight: 0.75,
+        stressBelow: 0.2,
+        stressAbove: 0.5,
+      },
+      light: {
+        limitLow: 50,
+        optimalLow: 300,
+        optimalHigh: 700,
+        limitHigh: 1400,
+        growthWeight: 1.25,
+        stressBelow: 0.75,
+        stressAbove: 0.5,
+      },
+      water: {
+        limitLow: 25,
+        optimalLow: 55,
+        optimalHigh: 75,
+        limitHigh: 92,
+        growthWeight: 1,
+        stressBelow: 1,
+        stressAbove: 1.5,
+      },
+      nutrients: {
+        limitLow: 0.4,
+        optimalLow: 1.4,
+        optimalHigh: 2.4,
+        limitHigh: 4.5,
+        growthWeight: 1,
+        stressBelow: 1,
+        stressAbove: 1.5,
+      },
+    },
+  },
+
   // Likes high light and CO2; sensitive to humidity and nutrients.
   tomato: {
     name: 'Tomato',
-    growthDays: 30,
-    yieldPerPlot: 10,
-    basePrice: 1.6,
+    growthHours: 196,
+    yieldPerPlot: 16,
+    seedCost: 15,
+    basePrice: 4.5,
+    seasonalPrice: { spring: 1.05, summer: 0.8, autumn: 1, winter: 1.3 },
+    waterUse: 0.04,
+    nutrientUse: 0.0015,
+    shelfLifeDays: 10,
     climate: {
       temperature: {
         limitLow: 10,
@@ -133,9 +284,14 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
   // Likes steady warmth; sensitive to cold and low light.
   pepper: {
     name: 'Pepper',
-    growthDays: 36,
-    yieldPerPlot: 7,
-    basePrice: 2.4,
+    growthHours: 425,
+    yieldPerPlot: 10,
+    seedCost: 30,
+    basePrice: 15,
+    seasonalPrice: { spring: 1, summer: 0.85, autumn: 1.05, winter: 1.25 },
+    waterUse: 0.025,
+    nutrientUse: 0.001,
+    shelfLifeDays: 14,
     climate: {
       temperature: {
         limitLow: 12,

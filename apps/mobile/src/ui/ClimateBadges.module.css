@@ -8,6 +8,12 @@
   pointer-events: none;
 }
 
+.row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .badge {
   --status: var(--idle);
   display: flex;

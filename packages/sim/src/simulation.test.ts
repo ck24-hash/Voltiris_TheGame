@@ -37,20 +37,24 @@ function ticksToReady(state: GameState, limit = 5000): number {
   return Infinity;
 }
 
+const TOMATO_HOURS = crops.tomato.growthHours;
+
 describe('a tomato in good conditions', () => {
   const start = plant(
     withClimate(newTestGame(), optimalClimate('tomato')),
     'tomato',
   );
 
-  it('is ready to harvest after exactly 30 in-game days (720 ticks)', () => {
-    expect(plantingAt(runTicks(start, 719))?.status).toBe('growing');
-    expect(plantingAt(runTicks(start, 720))).toMatchObject({
+  it('is ready to harvest after exactly its growth hours', () => {
+    expect(plantingAt(runTicks(start, TOMATO_HOURS - 1))?.status).toBe(
+      'growing',
+    );
+    expect(plantingAt(runTicks(start, TOMATO_HOURS))).toMatchObject({
       status: 'ready',
       plantedAtHour: 0,
-      readyAtHour: 720,
+      readyAtHour: TOMATO_HOURS,
       quality: 1,
-      yieldUnits: 10,
+      yieldUnits: crops.tomato.yieldPerPlot,
     });
   });
 });
@@ -60,11 +64,11 @@ describe('a tomato in a cold greenhouse (14 °C)', () => {
   const start = plant(withClimate(newTestGame(), cold), 'tomato');
 
   it('grows more slowly', () => {
-    expect(plantingAt(runTicks(start, 720))?.status).toBe('growing');
+    expect(plantingAt(runTicks(start, TOMATO_HOURS))?.status).toBe('growing');
     const rate = growthRate(cold, crops.tomato);
     expect(rate).toBeLessThan(1);
     const expectedTicks = ticksAtRate(rate, requiredGrowthHours(crops.tomato));
-    expect(expectedTicks).toBeGreaterThan(720);
+    expect(expectedTicks).toBeGreaterThan(TOMATO_HOURS);
     expect(ticksToReady(start)).toBe(expectedTicks);
   });
 
@@ -92,27 +96,35 @@ describe('climate at a crop limit', () => {
   });
 });
 
-describe.each(CROP_IDS)('%s in the starting greenhouse', (cropId) => {
-  it('grows slower and ends with lower quality than in optimal climate', () => {
-    const optimal = plant(
-      withClimate(newTestGame(), optimalClimate(cropId)),
-      cropId,
-    );
-    const starting = plant(newTestGame(), cropId);
+// Microgreens are happy in the starting greenhouse; the others want more
+// warmth, light or CO₂ (heaters, lights and CO₂ come in Phase 6).
+describe.each(CROP_IDS.filter((id) => id !== 'microgreens'))(
+  '%s in the starting greenhouse',
+  (cropId) => {
+    it('grows slower and ends with lower quality than in optimal climate', () => {
+      const optimal = plant(
+        withClimate(newTestGame(), optimalClimate(cropId)),
+        cropId,
+      );
+      const starting = plant(newTestGame(), cropId);
 
-    const optimalTicks = ticksToReady(optimal);
-    const startingTicks = ticksToReady(starting);
-    expect(optimalTicks).toBe(requiredGrowthHours(crops[cropId]));
-    expect(startingTicks).toBeGreaterThan(optimalTicks);
+      const optimalTicks = ticksToReady(optimal);
+      const startingTicks = ticksToReady(starting);
+      expect(optimalTicks).toBe(requiredGrowthHours(crops[cropId]));
+      expect(startingTicks).toBeGreaterThan(optimalTicks);
 
-    const optimalReady = plantingAt(runTicks(optimal, optimalTicks));
-    const startingReady = plantingAt(runTicks(starting, startingTicks));
-    if (optimalReady?.status !== 'ready' || startingReady?.status !== 'ready') {
-      throw new Error('expected ready crops');
-    }
-    expect(startingReady.quality).toBeLessThan(optimalReady.quality);
-  });
-});
+      const optimalReady = plantingAt(runTicks(optimal, optimalTicks));
+      const startingReady = plantingAt(runTicks(starting, startingTicks));
+      if (
+        optimalReady?.status !== 'ready' ||
+        startingReady?.status !== 'ready'
+      ) {
+        throw new Error('expected ready crops');
+      }
+      expect(startingReady.quality).toBeLessThan(optimalReady.quality);
+    });
+  },
+);
 
 describe('determinism', () => {
   /** Plants all three crops in the (non-optimal) starting climate and runs. */

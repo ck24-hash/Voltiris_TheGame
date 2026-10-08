@@ -233,7 +233,9 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
             onClick={() => store.getState().openWindow(id)}
           >
             {BUILDING_INFO[id].title}
-            <span className={styles.soon}>Soon</span>
+            {BUILDING_INFO[id].soon && (
+              <span className={styles.soon}>Soon</span>
+            )}
           </button>
         ))}
       </div>
@@ -274,7 +276,11 @@ const StaticRun = memo(function StaticRun({
             drawFence(g, item.segment);
             break;
           case 'building':
-            drawBuilding(g, item.building);
+            drawBuilding(
+              g,
+              item.building,
+              BUILDING_INFO[item.building.id].soon,
+            );
             break;
           case 'equipment': {
             const shape = EQUIPMENT_SHAPES[item.index];

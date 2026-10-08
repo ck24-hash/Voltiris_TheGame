@@ -1,23 +1,38 @@
 import { describe, expect, it } from 'vitest';
-import { CLIMATE_VARIABLES, CROP_IDS, defaultContent } from './index';
+import { CLIMATE_VARIABLES, CROP_IDS, SEASONS, defaultContent } from './index';
 
-const { crops, startingGreenhouse, time } = defaultContent;
+const { crops, startingGreenhouse, time, care, storage, market } =
+  defaultContent;
 
 describe('crops', () => {
-  it('match the launch crop table in the build plan', () => {
-    const table = CROP_IDS.map((id) => {
-      const { growthDays, yieldPerPlot, basePrice } = crops[id];
-      return { id, growthDays, yieldPerPlot, basePrice };
-    });
-    expect(table).toEqual([
-      { id: 'cucumber', growthDays: 20, yieldPerPlot: 14, basePrice: 1.0 },
-      { id: 'tomato', growthDays: 30, yieldPerPlot: 10, basePrice: 1.6 },
-      { id: 'pepper', growthDays: 36, yieldPerPlot: 7, basePrice: 2.4 },
-    ]);
-  });
-
   it('define exactly the known crop ids', () => {
     expect(Object.keys(crops).sort()).toEqual([...CROP_IDS].sort());
+  });
+
+  it('are listed from the quickest to the slowest', () => {
+    const hours = CROP_IDS.map((id) => crops[id].growthHours);
+    expect(hours).toEqual([...hours].sort((a, b) => a - b));
+  });
+
+  it.each(CROP_IDS)('%s has sensible amounts', (id) => {
+    const crop = crops[id];
+    expect(Number.isInteger(crop.growthHours)).toBe(true);
+    expect(Number.isInteger(crop.yieldPerPlot)).toBe(true);
+    expect(Number.isInteger(crop.seedCost)).toBe(true);
+    for (const value of [
+      crop.growthHours,
+      crop.yieldPerPlot,
+      crop.seedCost,
+      crop.basePrice,
+      crop.waterUse,
+      crop.nutrientUse,
+      crop.shelfLifeDays,
+    ]) {
+      expect(value).toBeGreaterThan(0);
+    }
+    for (const season of SEASONS) {
+      expect(crop.seasonalPrice[season]).toBeGreaterThan(0);
+    }
   });
 
   describe.each(CROP_IDS)('%s climate responses', (id) => {
@@ -50,6 +65,47 @@ describe('starting greenhouse', () => {
       }
     },
   );
+});
+
+describe('economy', () => {
+  it('lets a new player afford a full greenhouse of the dearest seeds', () => {
+    const dearest = Math.max(...CROP_IDS.map((id) => crops[id].seedCost));
+    expect(defaultContent.economy.startingMoney).toBeGreaterThanOrEqual(
+      dearest * startingGreenhouse.plots,
+    );
+  });
+
+  it.each(['water', 'nutrients'] as const)(
+    'tops up %s in whole coins, within reach of every crop band',
+    (resource) => {
+      const topUp = care[resource];
+      expect(Number.isInteger(topUp.cost)).toBe(true);
+      expect(topUp.amount).toBeGreaterThan(0);
+      for (const id of CROP_IDS) {
+        const band = crops[id].climate[resource];
+        expect(topUp.max).toBeGreaterThan(band.optimalHigh);
+        // One top-up never jumps right over a crop's optimal band.
+        expect(topUp.amount).toBeLessThan(band.optimalHigh - band.optimalLow);
+      }
+    },
+  );
+
+  it('stores a full greenhouse of any crop', () => {
+    for (const id of CROP_IDS) {
+      expect(storage.capacity).toBeGreaterThanOrEqual(
+        crops[id].yieldPerPlot * startingGreenhouse.plots,
+      );
+    }
+  });
+
+  it('keeps market swings around 1', () => {
+    expect(market.minSwing).toBeGreaterThan(0);
+    expect(market.minSwing).toBeLessThan(1);
+    expect(market.maxSwing).toBeGreaterThan(1);
+    expect(market.reversion).toBeGreaterThan(0);
+    expect(market.reversion).toBeLessThan(1);
+    expect(market.volatility).toBeGreaterThan(0);
+  });
 });
 
 describe('time', () => {

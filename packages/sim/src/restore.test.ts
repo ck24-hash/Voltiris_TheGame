@@ -1,6 +1,7 @@
 import { defaultContent, type GameContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import saveV1 from './fixtures/save-v1.json';
+import { initialMarket } from './market';
 import {
   migrateState,
   MIGRATIONS,
@@ -10,6 +11,7 @@ import {
 import { STATE_VERSION, type GameState } from './state';
 import {
   deepFreeze,
+  harvest,
   newTestGame,
   optimalClimate,
   plant,
@@ -22,10 +24,11 @@ function jsonCopy(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** Plot 0: a ready cucumber. Plot 2: a growing tomato. */
+/** Plot 0: a ready cucumber. Plot 2: a growing tomato. One harvest stored. */
 function playedGame(): GameState {
   const game = withClimate(newTestGame(), optimalClimate('cucumber'));
-  return runTicks(plant(plant(game, 'cucumber', 0), 'tomato', 2), 500);
+  const first = runTicks(plant(plant(game, 'cucumber', 0), 'tomato', 2), 30);
+  return runTicks(plant(harvest(first, 0), 'cucumber', 0), 30);
 }
 
 type Path = readonly (string | number)[];
@@ -63,7 +66,7 @@ describe('restoreGame', () => {
     });
   });
 
-  it('still loads a version 1 save', () => {
+  it('still loads a version 1 save, with an empty storage and a calm market', () => {
     const result = restoreGame(saveV1, defaultContent);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.fromVersion).toBe(1);
@@ -76,6 +79,8 @@ describe('restoreGame', () => {
       'empty',
       'empty',
     ]);
+    expect(result.state.storage).toEqual({ lots: [] });
+    expect(result.state.market).toEqual(initialMarket());
   });
 
   it('drops unknown extra fields', () => {
@@ -127,6 +132,16 @@ describe('restoreGame', () => {
       -1,
       'a number from 0 up',
     ],
+    [['storage'], REMOVE, 'an object'],
+    [['storage', 'lots'], null, 'a list'],
+    [['storage', 'lots', 0, 'units'], 0, 'a number from 1 up'],
+    [['storage', 'lots', 0, 'units'], 2.5, 'a whole number'],
+    [['storage', 'lots', 0, 'quality'], 1.2, 'at most 1'],
+    [['storage', 'lots', 0, 'cropId'], 'banana', 'a known crop'],
+    [['storage', 'lots', 0, 'harvestedAtHour'], REMOVE, 'a number from 0 up'],
+    [['market', 'swings'], [], 'an object'],
+    [['market', 'swings', 'strawberry'], REMOVE, 'a number'],
+    [['market', 'swings', 'tomato'], 0, 'a number above 0'],
   ])('rejects a bad %j, naming the field', (path, value, expected) => {
     const result = restoreGame(editedSave(path, value), defaultContent);
     expect(result).toEqual({

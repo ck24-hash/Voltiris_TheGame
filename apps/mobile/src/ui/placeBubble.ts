@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { BubbleAnchor } from '../game/store';
 
-export const BUBBLE_WIDTH = 300;
+export const BUBBLE_WIDTH = 340;
 /** Space above the plot a bubble needs; with less it opens below. */
 const ROOM_ABOVE = 210;
 /** Gap between the plot and the bubble, where the tail sits. */
@@ -15,12 +15,18 @@ export interface BubblePlacement {
 }
 
 /**
- * Where a plot's bubble and its tail go: above the plot when there is room,
- * otherwise below it, kept inside the screen's safe edges.
+ * Where a plot's bubble and its tail go: above the plot when there is room
+ * (or more room than below), otherwise below it, kept inside the screen's
+ * safe edges. `screenHeight` is the game view's height in pixels.
  */
-export function placeBubble(anchor: BubbleAnchor): BubblePlacement {
+export function placeBubble(
+  anchor: BubbleAnchor,
+  screenHeight: number,
+): BubblePlacement {
   const left = `clamp(var(--edge-left), ${anchor.x - BUBBLE_WIDTH / 2}px, calc(100% - ${BUBBLE_WIDTH}px - var(--edge-right)))`;
-  if (anchor.top >= ROOM_ABOVE) {
+  const roomAbove = anchor.top;
+  const roomBelow = screenHeight - anchor.bottom;
+  if (roomAbove >= ROOM_ABOVE || roomAbove >= roomBelow) {
     return {
       side: 'above',
       bubble: {

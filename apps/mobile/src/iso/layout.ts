@@ -37,7 +37,7 @@ export interface Footprint {
 }
 
 /** Buildings that open a game mode when tapped. */
-export type BuildingId = 'market' | 'energy' | 'village';
+export type BuildingId = 'market' | 'storage' | 'energy' | 'village';
 
 export interface Building {
   readonly id: BuildingId;
@@ -76,14 +76,20 @@ export function createLayout(plotCount: number): SceneLayout {
       i: greenhouse.i + 1 + (k % PLOT_COLUMNS),
       j: greenhouse.j + 1 + Math.floor(k / PLOT_COLUMNS),
     })),
-    // Placed so no name tag hangs over another building: the market by the
-    // road, the energy shed beside the greenhouse it powers, the town hall
-    // at the back. The front yard stays free for later.
+    // Placed so no name tag hangs over another building: the market and the
+    // storage barn by the road, the energy shed beside the greenhouse it
+    // powers, the town hall at the back. The middle of the front yard stays
+    // free for later.
     buildings: [
       {
         id: 'energy',
         footprint: { i: 11, j: greenhouse.j, width: 2, length: 2 },
         height: 100,
+      },
+      {
+        id: 'storage',
+        footprint: { i: 11, j: front, width: 2, length: 2 },
+        height: 110,
       },
       {
         id: 'market',

@@ -23,7 +23,14 @@ export interface CatchUpReport {
   /** Real time (ms) not simulated because of the catch-up cap. */
   readonly skippedMs: number;
   readonly cropsReady: readonly ReadyCrop[];
+  /** Harvests in storage that went off. */
+  readonly spoiled: readonly SpoiledLot[];
   readonly moneyChange: number;
+}
+
+export interface SpoiledLot {
+  readonly cropId: CropId;
+  readonly units: number;
 }
 
 /**
@@ -48,9 +55,18 @@ export function catchUp(
       ticks,
       skippedMs: (due - ticks) * content.time.realMsPerTick,
       cropsReady: cropsReadySince(next, gameHour),
+      spoiled: lotsGone(state, next),
       moneyChange: next.money - state.money,
     },
   };
+}
+
+/** Lots in storage before that are gone after: ticks only remove spoiled ones. */
+function lotsGone(before: GameState, after: GameState): SpoiledLot[] {
+  const kept = new Set(after.storage.lots.map((lot) => lot.id));
+  return before.storage.lots
+    .filter((lot) => !kept.has(lot.id))
+    .map(({ cropId, units }) => ({ cropId, units }));
 }
 
 function cropsReadySince(state: GameState, sinceHour: number): ReadyCrop[] {

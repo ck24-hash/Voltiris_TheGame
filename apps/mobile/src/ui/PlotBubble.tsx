@@ -1,27 +1,26 @@
-import {
-  CLIMATE_VARIABLES,
-  CROP_IDS,
-  type Climate,
-  type CropId,
-} from '@voltiris/content';
+import { CLIMATE_VARIABLES, CROP_IDS, type CropId } from '@voltiris/content';
 import {
   cropQuality,
   growthProgress,
   growthRate,
   hoursToReady,
+  type CommandError,
   type Greenhouse,
   type GrowingPlanting,
   type ReadyPlanting,
 } from '@voltiris/sim';
+import { useState } from 'react';
+import { describeCommandError } from '../game/commandErrors';
 import { useGame } from '../game/context';
 import {
   formatGameHours,
   formatPercent,
-  formatPrice,
   formatRealDuration,
+  formatShortDuration,
 } from '../game/format';
 import { GAUGES, readGauge } from '../game/gauges';
-import { CROP_ICONS } from '../game/selectors';
+import { CARE, CROP_ICONS } from '../game/selectors';
+import { CareButton } from './CareButton';
 import { cx } from './cx';
 import { GameButton } from './GameButton';
 import { ClimateIcon, ClockIcon } from './icons';
@@ -29,46 +28,41 @@ import { BUBBLE_WIDTH, placeBubble } from './placeBubble';
 import styles from './PlotBubble.module.css';
 import { VolticoinIcon } from './VolticoinIcon';
 
-/** Pop-up next to the tapped plot: plant it, or follow its crop. */
+type ShowError = (error: CommandError | null) => void;
+
+/** Where long crop names may break on the narrow seed cards (soft hyphens). */
+const SEED_LABELS: Partial<Record<CropId, string>> = {
+  microgreens: 'Micro­greens',
+  cucumber: 'Cucum­ber',
+  strawberry: 'Straw­berry',
+};
+
+/** Pop-up next to the tapped plot: plant it, follow its crop, harvest it. */
 export function PlotBubble() {
   const selection = useGame((s) => s.selection);
   const greenhouse = useGame((s) => s.game.greenhouses[0]);
-  const lastError = useGame((s) => s.lastError);
 
   if (!greenhouse || !selection) return null;
   const index = greenhouse.plots.findIndex((p) => p.id === selection.plotId);
   const plot = greenhouse.plots[index];
   if (!plot) return null;
-  const title = `Plot ${index + 1}`;
-  const { planting } = plot;
-  const place = placeBubble(selection.anchor);
+  const place = placeBubble(selection.anchor, window.innerHeight);
 
   return (
     <div className={styles.layer}>
       <div
         role="dialog"
-        aria-label={title}
+        aria-label={`Plot ${index + 1}`}
         className={cx(styles.bubble, styles[place.side])}
         style={{ ...place.bubble, width: BUBBLE_WIDTH }}
       >
-        {planting === null && (
-          <SeedPicker title={title} greenhouse={greenhouse} plotId={plot.id} />
-        )}
-        {planting?.status === 'growing' && (
-          <Growing
-            title={title}
-            planting={planting}
-            climate={greenhouse.climate}
-          />
-        )}
-        {planting?.status === 'ready' && (
-          <Ready title={title} planting={planting} />
-        )}
-        {lastError && (
-          <p className={styles.error} role="alert">
-            {lastError.message}
-          </p>
-        )}
+        {/* A new plot starts without the last plot's error. */}
+        <PlotContent
+          key={plot.id}
+          title={`Plot ${index + 1}`}
+          greenhouse={greenhouse}
+          plotId={plot.id}
+        />
       </div>
       <div
         className={cx(styles.tail, styles[`tail-${place.side}`])}
@@ -78,7 +72,7 @@ export function PlotBubble() {
   );
 }
 
-function SeedPicker({
+function PlotContent({
   title,
   greenhouse,
   plotId,
@@ -87,7 +81,59 @@ function SeedPicker({
   greenhouse: Greenhouse;
   plotId: string;
 }) {
+  const [error, setError] = useState<CommandError | null>(null);
+  const planting = greenhouse.plots.find((p) => p.id === plotId)?.planting;
+
+  return (
+    <>
+      {!planting && (
+        <SeedPicker
+          title={title}
+          greenhouse={greenhouse}
+          plotId={plotId}
+          onError={setError}
+        />
+      )}
+      {planting?.status === 'growing' && (
+        <Growing
+          title={title}
+          planting={planting}
+          greenhouse={greenhouse}
+          onError={setError}
+        />
+      )}
+      {planting?.status === 'ready' && (
+        <Ready
+          title={title}
+          planting={planting}
+          greenhouseId={greenhouse.id}
+          plotId={plotId}
+          onError={setError}
+        />
+      )}
+      {error && (
+        <p className={styles.error} role="alert">
+          {describeCommandError(error)}
+        </p>
+      )}
+    </>
+  );
+}
+
+function SeedPicker({
+  title,
+  greenhouse,
+  plotId,
+  onError,
+}: {
+  title: string;
+  greenhouse: Greenhouse;
+  plotId: string;
+  onError: ShowError;
+}) {
   const crops = useGame((s) => s.content.crops);
+  const msPerTick = useGame((s) => s.content.time.realMsPerTick);
+  const money = useGame((s) => s.game.money);
   const plantCrop = useGame((s) => s.plantCrop);
 
   return (
@@ -99,29 +145,34 @@ function SeedPicker({
       <ul className={styles.seeds}>
         {CROP_IDS.map((id) => {
           const crop = crops[id];
-          const speed = growthRate(greenhouse.climate, crop);
+          const rate = growthRate(greenhouse.climate, crop);
+          const ticks = rate > 0 ? crop.growthHours / rate : Infinity;
+          const affordable = money >= crop.seedCost;
           return (
             <li key={id}>
               <button
                 type="button"
                 className={styles.seed}
                 aria-label={`Plant ${crop.name}`}
-                onClick={() => plantCrop(greenhouse.id, plotId, id)}
+                disabled={!affordable}
+                onClick={() => onError(plantCrop(greenhouse.id, plotId, id))}
               >
                 <span className={styles.seedIcon} aria-hidden="true">
                   {CROP_ICONS[id]}
                 </span>
-                <strong>{crop.name}</strong>
-                <span>{crop.growthDays} days</span>
-                <span className={styles.price}>
-                  {crop.yieldPerPlot} × <VolticoinIcon size={12} />
-                  {formatPrice(crop.basePrice)}
-                </span>
+                <strong className={styles.seedName}>
+                  {SEED_LABELS[id] ?? crop.name}
+                </strong>
                 <span
-                  className={cx(styles.speed, speed < 0.75 && styles.slow)}
-                  title="Growth speed in this greenhouse"
+                  className={cx(styles.seedTime, rate < 0.75 && styles.slow)}
+                  title="Time to harvest in this greenhouse"
                 >
-                  {formatPercent(speed)} speed
+                  <ClockIcon size={11} />
+                  {formatShortDuration(ticks * msPerTick)}
+                </span>
+                <span className={styles.cost}>
+                  <VolticoinIcon size={12} />
+                  {crop.seedCost}
                 </span>
               </button>
             </li>
@@ -135,15 +186,18 @@ function SeedPicker({
 function Growing({
   title,
   planting,
-  climate,
+  greenhouse,
+  onError,
 }: {
   title: string;
   planting: GrowingPlanting;
-  climate: Climate;
+  greenhouse: Greenhouse;
+  onError: ShowError;
 }) {
   const content = useGame((s) => s.content);
   const gameHour = useGame((s) => s.game.clock.gameHour);
   const crop = content.crops[planting.cropId];
+  const { climate } = greenhouse;
 
   const progress = growthProgress(planting, crop);
   const rate = growthRate(climate, crop);
@@ -157,6 +211,13 @@ function Growing({
     variable,
     reading: readGauge(variable, climate[variable], [crop]),
   })).filter(({ reading }) => reading.status !== 'good');
+  // Too little water or nutrients: a top-up right here helps.
+  const needs = CARE.filter((resource) =>
+    issues.some(
+      ({ variable, reading }) =>
+        variable === resource && reading.note === GAUGES[resource].low,
+    ),
+  );
 
   return (
     <>
@@ -215,6 +276,18 @@ function Growing({
           </ul>
         </div>
       )}
+      {needs.length > 0 && (
+        <div className={styles.care}>
+          {needs.map((resource) => (
+            <CareButton
+              key={resource}
+              resource={resource}
+              greenhouseId={greenhouse.id}
+              onDone={onError}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -222,10 +295,26 @@ function Growing({
 function Ready({
   title,
   planting,
+  greenhouseId,
+  plotId,
+  onError,
 }: {
   title: string;
   planting: ReadyPlanting;
+  greenhouseId: string;
+  plotId: string;
+  onError: ShowError;
 }) {
+  const harvestCrop = useGame((s) => s.harvestCrop);
+  const notify = useGame((s) => s.notify);
+  const name = useGame((s) => s.content.crops[planting.cropId].name);
+
+  const harvest = () => {
+    const error = harvestCrop(greenhouseId, plotId);
+    onError(error);
+    if (!error) notify(`${planting.yieldUnits} × ${name} went to storage`);
+  };
+
   return (
     <>
       <CropHeader
@@ -243,10 +332,9 @@ function Ready({
           <strong>{planting.yieldUnits}</strong> units
         </span>
       </p>
-      <GameButton tone="gold" disabled className={styles.wide}>
+      <GameButton tone="gold" className={styles.wide} onClick={harvest}>
         Harvest
       </GameButton>
-      <p className={styles.muted}>Harvesting opens soon.</p>
     </>
   );
 }

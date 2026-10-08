@@ -1,7 +1,8 @@
-import { defaultContent } from '@voltiris/content';
+import { CROP_IDS, defaultContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { createManualClock } from './clock';
 import { createGame } from './newGame';
+import { STATE_VERSION, type GameState } from './state';
 import { advance, maxCatchUpTicks, tick } from './tick';
 import {
   deepFreeze,
@@ -19,7 +20,7 @@ import { ticksDue } from './time';
 const MS_PER_TICK = defaultContent.time.realMsPerTick;
 
 describe('createGame', () => {
-  it('starts a version 1 game with one empty greenhouse', () => {
+  it('starts a game with one empty greenhouse, empty storage and a calm market', () => {
     const clock = createManualClock(1_700_000_000_000);
     const state = createGame(
       { playerId: TEST_PLAYER_ID, seed: 42 },
@@ -28,7 +29,9 @@ describe('createGame', () => {
     );
     const { startingGreenhouse, economy } = defaultContent;
 
-    expect(state.version).toBe(1);
+    expect(state.version).toBe(STATE_VERSION);
+    expect(state.storage).toEqual({ lots: [] });
+    expect(Object.values(state.market.swings)).toEqual(CROP_IDS.map(() => 1));
     expect(state.playerId).toBe(TEST_PLAYER_ID);
     expect(state.clock).toEqual({ gameHour: 0, lastTickAt: clock.now() });
     expect(state.money).toBe(economy.startingMoney);
@@ -83,7 +86,7 @@ describe('tick', () => {
       withClimate(newTestGame(), optimalClimate('cucumber')),
       'cucumber',
     );
-    const ready = runTicks(state, 480);
+    const ready = runTicks(state, 30);
     expect(plantingAt(ready)?.status).toBe('ready');
     expect(plantingAt(runTicks(ready, 100))).toEqual(plantingAt(ready));
   });
@@ -91,6 +94,77 @@ describe('tick', () => {
   it('never mutates the input state', () => {
     const state = deepFreeze(plant(newTestGame(), 'tomato'));
     expect(() => tick(state, defaultContent)).not.toThrow();
+  });
+
+  it('moves market prices every tick, with the seeded rng', () => {
+    const state = newTestGame();
+    const next = tick(state, defaultContent);
+    expect(next.market).not.toEqual(state.market);
+    expect(next.rng).not.toEqual(state.rng);
+    expect(tick(state, defaultContent)).toEqual(next);
+  });
+
+  it('throws away spoiled harvests in storage', () => {
+    const lot = {
+      id: 'lot-1',
+      cropId: 'strawberry',
+      units: 8,
+      quality: 1,
+      harvestedAtHour: 0,
+    } as const;
+    const state = { ...newTestGame(), storage: { lots: [lot] } };
+    const shelfLife = defaultContent.crops.strawberry.shelfLifeDays * 24;
+    expect(runTicks(state, shelfLife - 1).storage.lots).toEqual([lot]);
+    expect(runTicks(state, shelfLife).storage.lots).toEqual([]);
+  });
+});
+
+describe('water and nutrients', () => {
+  const { cucumber } = defaultContent.crops;
+  const climate = (state: GameState) => firstGreenhouse(state).climate;
+
+  it('are used up by growing crops, in proportion to their growth', () => {
+    const start = plant(
+      plant(withClimate(newTestGame(), optimalClimate('cucumber')), 'cucumber'),
+      'cucumber',
+      1,
+    );
+    const after = runTicks(start, 10);
+    // Two cucumbers at full speed grow 10 hours each.
+    expect(climate(after).water).toBeCloseTo(
+      climate(start).water - 2 * 10 * cucumber.waterUse,
+      10,
+    );
+    expect(climate(after).nutrients).toBeCloseTo(
+      climate(start).nutrients - 2 * 10 * cucumber.nutrientUse,
+      10,
+    );
+  });
+
+  it('are not used by a crop that has stopped growing, or one that is ready', () => {
+    const frozen = { ...optimalClimate('tomato'), temperature: 10 };
+    const stalled = plant(withClimate(newTestGame(), frozen), 'tomato');
+    expect(climate(runTicks(stalled, 50))).toEqual(frozen);
+
+    const cucumbers = withClimate(newTestGame(), optimalClimate('cucumber'));
+    const ready = runTicks(plant(cucumbers, 'cucumber'), 30);
+    expect(plantingAt(ready)?.status).toBe('ready');
+    expect(climate(runTicks(ready, 50))).toEqual(climate(ready));
+  });
+
+  it('running dry stops growth and lowers quality, but the crop lives on', () => {
+    const wet = withClimate(newTestGame(), optimalClimate('cucumber'));
+    const dry = withClimate(wet, { water: cucumber.climate.water.limitLow });
+    const wetCrop = plantingAt(runTicks(plant(wet, 'cucumber'), 20));
+    const dryCrop = plantingAt(runTicks(plant(dry, 'cucumber'), 20));
+    expect(dryCrop).toMatchObject({ status: 'growing', growthHours: 0 });
+    expect(dryCrop?.stress).toBeGreaterThan(wetCrop?.stress ?? 0);
+
+    // Watered again, it grows on.
+    const watered = withClimate(runTicks(plant(dry, 'cucumber'), 20), {
+      water: optimalClimate('cucumber').water,
+    });
+    expect(plantingAt(runTicks(watered, 30))?.status).toBe('ready');
   });
 });
 

@@ -38,10 +38,11 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 ## Sim API (packages/sim)
 
 - `createGame({ playerId, seed }, content, clock)` – new GameState (ids come from the seeded RNG)
-- `applyCommand(state, command, content)` – `{ ok: true, state }` or `{ ok: false, error }`; rejected commands leave state untouched
-- `tick(state, content)` – exactly one in-game hour
+- `applyCommand(state, command, content)` – `{ ok: true, state }` or `{ ok: false, error }`; rejected commands leave state untouched. Commands: `PlantCrop` (pays the seeds), `Water`, `Fertilize` (top up a greenhouse for a fee), `HarvestCrop` (ready crop → storage lot), `SellCrop` (units of a crop, oldest lots first)
+- `tick(state, content)` – exactly one in-game hour: crops grow and use water and nutrients in proportion to their growth, spoiled lots leave storage, market swings move (seeded RNG)
 - `advance(state, clock, content)` – runs every tick due by `clock.now()`, at most `content.time.maxCatchUpMs` (24 real hours); the rest is skipped. Call it before applying a command
-- `catchUp(state, clock, content)` – `advance` plus a report for the "while you were away" summary (time away, ticks, skipped time, crops that became ready, money change)
+- `catchUp(state, clock, content)` – `advance` plus a report for the "while you were away" summary (time away, ticks, skipped time, crops that became ready, produce that spoiled, money change)
+- `market.ts` – `cropPrice` = base price × `seasonalFactor` × swing; `storage.ts` – `freshness`, `lotQuality`, `stockOf`, `sell`. Prices and growth use only + − × ÷ where they must match on every device (no `Math.sin`)
 - `restoreGame(raw, content)` – turns saved JSON back into a GameState: runs `MIGRATIONS`, then checks every field. When STATE_VERSION goes up, add `MIGRATIONS[oldVersion]` with a test; `src/fixtures/save-v1.json` must keep loading
 - Content is always passed in (`defaultContent` from @voltiris/content), so tests and balance scripts can use their own
 - Sim tests share helpers in `packages/sim/src/test-utils.ts`
@@ -52,8 +53,10 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - `save/` – `SaveStore` interface: files in the app's Library folder on phones (Capacitor Filesystem; iOS may clear web storage), IndexedDB (Dexie) in browsers, memory for tests. `loadGame` (current save, then the 2 backups); autosave; the `voltiris-save` JSON file format for export (share sheet on phones, download in browsers) and import.
 - `iso/` – pure isometric math: projection, camera, world layout (lot, buildings, road, tap targets), scenery placement, draw order, gesture tracking. Unit-tested.
 - `scene/` – Pixi world via @pixi/react; `draw/` holds the placeholder toon shapes. Camera moves are written straight to the Pixi container (and the DOM name tags over buildings), never through React state.
-- `ui/` – DOM overlay: HUD, climate badges, plot bubble, game windows (buildings, settings, welcome back, load problem), toast. Shared game look: `GameButton`, `GameWindow`, `icons.tsx`, Fredoka font.
+- `ui/` – DOM overlay: HUD, climate badges (with water/feed "+"), plot bubble (seeds, growth, harvest), game windows (market, storage, buildings to come, settings, welcome back, load problem), toast. Shared game look: `GameButton`, `GameWindow`, `CareButton`, `icons.tsx`, Fredoka font.
+- Store actions for commands return the sim's `CommandError` (or null); the screen that sent it shows it (`game/commandErrors.ts` has the player-facing text).
 - App tests mock `scene/GameCanvas` (jsdom has no WebGL); rendering and real taps are covered by the e2e tests (`apps/mobile/e2e`, positions from `iso/view.ts`) and the emulator / iOS Simulator.
+- In e2e tests, skip game time with `page.clock.fastForward` (or `setSystemTime`), never `runFor`: `runFor` fires every animation frame in between and stalls software rendering.
 
 ## Dev flags
 
@@ -65,12 +68,17 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 
 - Currency: Volticoin (coin icon with a lightning bolt).
 - Tone: playful toon look, but real units (°C, %, ppm, PAR, EC) with plain-language status ("Too cold").
-- Climate is static greenhouse state until its drivers arrive: water/nutrient use (Phase 5), equipment (Phase 6), weather (Phase 10).
+- Crops (quickest first): microgreens ~2 min, cucumber ~7 min, strawberry ~30 min, tomato ~1 h, pepper ~2 h of real time in the starting greenhouse (`growthHours` in content). Slower crops earn more per harvest but less per hour, so active play pays and slow crops suit a break. `sim/src/economy.test.ts` guards these targets and the Phase 5 "profit in 10 minutes".
+- Water and nutrients drain as crops grow; the player tops them up by hand for a small fee (fixed steps, too much is bad too). A crop that runs dry stops growing and takes stress (lower quality), but never dies. Fertigation automates this in Phase 6.
+- Harvests go to the storage barn (capacity in content) and lose freshness linearly over the crop's shelf life, then spoil. Ready crops wait on the plant without losing quality.
+- Market price = base × season (gradual, per crop) × a swing that wanders around 1 every tick. Sale value = units × price × quality × freshness, rounded to whole Volticoins.
+- Climate other than water and nutrients is static until equipment (Phase 6) and weather (Phase 10).
 - Gauges judge each value against the growing crop that is worst off.
-- Game modes are buildings on the map, not a menu: Market stall → Market, Energy shed → Energy, Town hall → Village. Tap the building or its name tag. They show "under construction" until their phase.
-- Tapping a plot opens a bubble at the plot (seeds, growth, what holds it back); panning closes it.
+- Game modes are buildings on the map, not a menu: Market stall → Market, Storage barn → Storage, Energy shed → Energy, Town hall → Village. Tap the building or its name tag. Energy and Village show "under construction" (cones, "Soon") until their phase.
+- Tapping a plot opens a bubble at the plot (seeds with cost and time, growth, what holds it back with water/feed buttons, harvest); panning closes it.
+- A window's backdrop only closes it when the press started on the backdrop: the click that follows the tap which opened the window lands there.
 - Climate shows as badges down the left edge; the ring colour is the status, with a note when off.
-- The player's lot sits beside a road on endless land. The camera stays over the lot (2 tiles inside the fence) and zooms out until the whole lot fits. "For sale" signs mark future expansions. The lot and building spots live in `iso/layout.ts` until Phase 9 puts land into GameState.
+- The player's lot sits beside a road on endless land. The camera stays over the lot (2 tiles inside the fence) and zooms out until the whole lot fits, or the whole yard fits beside the HUD. "For sale" signs mark future expansions. The lot and building spots live in `iso/layout.ts` until Phase 9 puts land into GameState.
 - "Reduce Motion" turns off the pop-in animations (the e2e tests run with it on).
 - Full screen: system bars and the iOS home indicator hidden (Capacitor SystemBars); edge swipes are deferred (`GameViewController` on iOS, transient bars on Android) so panning near an edge stays in the game.
 - Saves: every 30 s, after every command and when the app is hidden; current save plus 2 backups. A damaged save or one from a newer version is never replaced without asking.

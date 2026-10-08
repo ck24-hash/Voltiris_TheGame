@@ -30,10 +30,10 @@ describe('game store', () => {
     const plotId = greenhouse.plots[0]?.id ?? '';
 
     clock.advance(5 * MS_PER_TICK);
-    store.getState().plantCrop(greenhouse.id, plotId, 'tomato');
+    const error = store.getState().plantCrop(greenhouse.id, plotId, 'tomato');
 
-    const { game, lastError } = store.getState();
-    expect(lastError).toBeNull();
+    const { game } = store.getState();
+    expect(error).toBeNull();
     expect(game.clock.gameHour).toBe(5);
     expect(firstGreenhouseOf(store).plots[0]?.planting).toMatchObject({
       status: 'growing',
@@ -65,18 +65,39 @@ describe('game store', () => {
     expect(firstGreenhouseOf(store).plots[0]?.planting?.plantedAtHour).toBe(0);
   });
 
-  it('keeps the error of a rejected command until the next selection', () => {
+  it('returns why the sim refused a command, and changes nothing', () => {
     const { store } = createTestStore();
     const greenhouse = firstGreenhouseOf(store);
     const plotId = greenhouse.plots[0]?.id ?? '';
 
     store.getState().plantCrop(greenhouse.id, plotId, 'tomato');
-    store.getState().plantCrop(greenhouse.id, plotId, 'pepper');
-    expect(store.getState().lastError?.code).toBe('PLOT_OCCUPIED');
-    expect(firstGreenhouseOf(store).plots[0]?.planting?.cropId).toBe('tomato');
+    const before = store.getState().game;
+    const error = store.getState().plantCrop(greenhouse.id, plotId, 'pepper');
+    expect(error?.code).toBe('PLOT_OCCUPIED');
+    expect(store.getState().game).toBe(before);
+  });
 
-    store.getState().selectPlot({ plotId, anchor: ANCHOR });
-    expect(store.getState().lastError).toBeNull();
+  it('runs the whole crop loop: plant, water, feed, harvest and sell', () => {
+    const { clock, store } = createTestStore();
+    const greenhouse = firstGreenhouseOf(store);
+    const plotId = greenhouse.plots[0]?.id ?? '';
+    const actions = store.getState();
+    const money = () => store.getState().game.money;
+
+    expect(actions.plantCrop(greenhouse.id, plotId, 'microgreens')).toBeNull();
+    expect(actions.water(greenhouse.id)).toBeNull();
+    expect(actions.fertilize(greenhouse.id)).toBeNull();
+    expect(actions.harvestCrop(greenhouse.id, plotId)?.code).toBe('NOT_READY');
+
+    clock.advance(10 * MS_PER_TICK);
+    expect(actions.harvestCrop(greenhouse.id, plotId)).toBeNull();
+    const beforeSale = money();
+    const { yieldPerPlot } = defaultContent.crops.microgreens;
+    expect(actions.sellCrop('microgreens', yieldPerPlot)).toBeNull();
+
+    expect(store.getState().game.storage.lots).toEqual([]);
+    expect(money()).toBeGreaterThan(beforeSale);
+    expect(store.getState().checkpoint).toBe(5);
   });
 
   it('asks for a save after every accepted command, not a rejected one', () => {

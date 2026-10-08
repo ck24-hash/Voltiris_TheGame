@@ -1,7 +1,10 @@
 import type {
+  CareConfig,
   EconomyConfig,
   GrowthConfig,
+  MarketConfig,
   StartingGreenhouseConfig,
+  StorageConfig,
   TimeConfig,
 } from './types';
 
@@ -31,4 +34,21 @@ export const ECONOMY: EconomyConfig = {
 
 export const GROWTH: GrowthConfig = {
   stressQualityPenalty: 1,
+};
+
+export const CARE: CareConfig = {
+  water: { amount: 10, cost: 2, max: 100 },
+  nutrients: { amount: 0.3, cost: 3, max: 6 },
+};
+
+export const STORAGE: StorageConfig = {
+  capacity: 150,
+};
+
+// Swings of about ±10% around the seasonal price, settling within minutes.
+export const MARKET: MarketConfig = {
+  reversion: 0.02,
+  volatility: 0.03,
+  minSwing: 0.6,
+  maxSwing: 1.6,
 };

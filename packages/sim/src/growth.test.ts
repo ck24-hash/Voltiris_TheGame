@@ -138,12 +138,13 @@ describe('growthProgress', () => {
       growthHours: 0,
       stress: 0,
     } as const;
+    const half = crops.tomato.growthHours / 2;
     expect(growthProgress(planting, crops.tomato)).toBe(0);
     expect(
-      growthProgress({ ...planting, growthHours: 360 }, crops.tomato),
+      growthProgress({ ...planting, growthHours: half }, crops.tomato),
     ).toBe(0.5);
     expect(
-      growthProgress({ ...planting, growthHours: 900 }, crops.tomato),
+      growthProgress({ ...planting, growthHours: half * 3 }, crops.tomato),
     ).toBe(1);
   });
 });
@@ -153,13 +154,14 @@ describe('hoursToReady', () => {
     status: 'growing',
     cropId: 'tomato',
     plantedAtHour: 0,
-    growthHours: 120,
+    growthHours: 100,
     stress: 0,
   } as const;
+  const remaining = crops.tomato.growthHours - 100;
 
   it('is the remaining hours in optimal climate', () => {
     expect(hoursToReady(planting, optimalClimate('tomato'), crops.tomato)).toBe(
-      600,
+      remaining,
     );
   });
 
@@ -167,7 +169,7 @@ describe('hoursToReady', () => {
     const cold = { ...optimalClimate('tomato'), temperature: 14 };
     const rate = growthRate(cold, crops.tomato);
     expect(hoursToReady(planting, cold, crops.tomato)).toBe(
-      Math.ceil(600 / rate),
+      Math.ceil(remaining / rate),
     );
   });
 
@@ -178,9 +180,8 @@ describe('hoursToReady', () => {
 });
 
 describe('requiredGrowthHours', () => {
-  it('converts growth days to ticks (hours)', () => {
-    expect(requiredGrowthHours(crops.tomato)).toBe(720);
-    expect(requiredGrowthHours(crops.cucumber)).toBe(480);
-    expect(requiredGrowthHours(crops.pepper)).toBe(864);
+  it("is the crop's growth hours: one tick grows at most one hour", () => {
+    expect(requiredGrowthHours(crops.microgreens)).toBe(8);
+    expect(requiredGrowthHours(crops.tomato)).toBe(crops.tomato.growthHours);
   });
 });

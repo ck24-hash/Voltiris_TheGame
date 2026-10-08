@@ -1,11 +1,20 @@
 import { defaultContent } from '@voltiris/content';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { cropPrice, STATE_VERSION, type GameState } from '@voltiris/sim';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { GameStoreContext } from './game/context';
 import { ServicesContext, type AppServices } from './game/services';
 import { createTestStore, firstGreenhouseOf } from './game/test-utils';
+import type { BuildingId } from './iso/layout';
 import { readSaveText } from './save/saveFile';
 
 // jsdom has no WebGL; the Pixi scene is checked on a device instead.
@@ -47,13 +56,35 @@ function renderApp() {
         .getState()
         .selectPlot(plot ? { plotId: plot.id, anchor: ANCHOR } : null);
     });
-  const tapBuilding = (id: 'market' | 'energy' | 'village') =>
+  const tapBuilding = (id: BuildingId) =>
     act(() => store.getState().openWindow(id));
   return { store, services, freshGame, runTicks, openPlot, tapBuilding };
 }
 
 function badge(name: string) {
   return screen.getByRole('group', { name });
+}
+
+function withWater(game: GameState, water: number): GameState {
+  return {
+    ...game,
+    greenhouses: game.greenhouses.map((g) => ({
+      ...g,
+      climate: { ...g.climate, water },
+    })),
+  };
+}
+
+/** 8 strawberries of 90% quality, just harvested. */
+function withHarvest(game: GameState): GameState {
+  const lot = {
+    id: 'lot-1',
+    cropId: 'strawberry',
+    units: 8,
+    quality: 0.9,
+    harvestedAtHour: game.clock.gameHour,
+  } as const;
+  return { ...game, storage: { lots: [lot] } };
 }
 
 describe('HUD', () => {
@@ -104,13 +135,16 @@ describe('plot bubble', () => {
     expect(within(bubble).getByText('Pick a seed')).toBeDefined();
     expect(
       within(bubble).getAllByRole('button', { name: /^Plant / }),
-    ).toHaveLength(3);
+    ).toHaveLength(5);
+    const tomato = within(bubble).getByRole('button', { name: 'Plant Tomato' });
+    // Seed price, and about an hour to grow in the starting greenhouse.
+    expect(tomato).toHaveTextContent('15');
+    expect(tomato).toHaveTextContent('1 h');
 
-    await user.click(
-      within(bubble).getByRole('button', { name: 'Plant Tomato' }),
-    );
+    await user.click(tomato);
 
     expect(firstGreenhouseOf(store).plots[0]?.planting?.cropId).toBe('tomato');
+    expect(screen.getByLabelText('485 Volticoins')).toBeDefined();
     expect(within(bubble).getByText('Growing')).toBeDefined();
     expect(
       within(bubble).getByRole('progressbar', { name: 'Growth' }),
@@ -137,11 +171,49 @@ describe('plot bubble', () => {
     const user = userEvent.setup();
     const { openPlot, runTicks } = renderApp();
     openPlot(0);
-    await user.click(screen.getByRole('button', { name: 'Plant Cucumber' }));
+    await user.click(screen.getByRole('button', { name: 'Plant Pepper' }));
 
-    runTicks(24 * 5);
+    runTicks(100);
     const meter = screen.getByRole('progressbar', { name: 'Growth' });
     expect(Number(meter.getAttribute('aria-valuenow'))).toBeGreaterThan(10);
+  });
+
+  it('offers water right where it says the plants are thirsty', async () => {
+    const user = userEvent.setup();
+    const { store, openPlot } = renderApp();
+    act(() =>
+      store.getState().replaceGame(withWater(store.getState().game, 40)),
+    );
+    openPlot(0);
+    await user.click(screen.getByRole('button', { name: 'Plant Cucumber' }));
+
+    const bubble = screen.getByRole('dialog', { name: 'Plot 1' });
+    expect(within(bubble).getByText('Thirsty')).toBeDefined();
+    await user.click(
+      within(bubble).getByRole('button', { name: /^Water the plants/ }),
+    );
+    expect(firstGreenhouseOf(store).climate.water).toBe(50);
+  });
+
+  it('harvests a ready crop into storage', async () => {
+    const user = userEvent.setup();
+    const { store, openPlot, runTicks } = renderApp();
+    openPlot(0);
+    await user.click(screen.getByRole('button', { name: 'Plant Microgreens' }));
+    runTicks(12);
+
+    const bubble = screen.getByRole('dialog', { name: 'Plot 1' });
+    expect(within(bubble).getByText('Ready!')).toBeDefined();
+    await user.click(within(bubble).getByRole('button', { name: 'Harvest' }));
+
+    expect(store.getState().game.storage.lots).toMatchObject([
+      { cropId: 'microgreens', units: 6 },
+    ]);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '6 × Microgreens went to storage',
+    );
+    // The plot is free again: straight back to the seeds.
+    expect(within(bubble).getByText('Pick a seed')).toBeDefined();
   });
 
   it('closes when the player taps elsewhere', () => {
@@ -155,16 +227,88 @@ describe('plot bubble', () => {
 
 describe('buildings', () => {
   it.each([
-    ['market', 'Market', 'Market stall'],
     ['energy', 'Energy', 'Energy shed'],
     ['village', 'Village', 'Town hall'],
-  ] as const)('the %s building opens the %s window', (id, title, building) => {
+  ] as const)(
+    'the %s building is under construction',
+    (id, title, building) => {
+      const { tapBuilding } = renderApp();
+      tapBuilding(id);
+      const window = screen.getByRole('dialog', { name: title });
+      expect(within(window).getByText(building)).toBeDefined();
+      expect(within(window).getByText('Under construction')).toBeDefined();
+      expect(screen.getByTestId('game-canvas')).toBeDefined();
+    },
+  );
+
+  it('the storage shows each harvest and how fresh it still is', async () => {
+    const user = userEvent.setup();
+    const { store, tapBuilding, runTicks } = renderApp();
+    // The game is already running, so the ticks below are play, not a break.
+    runTicks(0);
+    act(() => store.getState().replaceGame(withHarvest(store.getState().game)));
+    tapBuilding('storage');
+    const window = screen.getByRole('dialog', { name: 'Storage' });
+    expect(
+      within(window).getByRole('meter', { name: 'Storage used' }),
+    ).toHaveAttribute('aria-valuenow', '8');
+    expect(within(window).getByText('8 × Strawberry')).toBeDefined();
+    expect(within(window).getByText('Quality 90%')).toBeDefined();
+    // Strawberries keep 3 game days: 18 real minutes.
+    expect(within(window).getByText('Fresh for 18 min')).toBeDefined();
+
+    runTicks(36);
+    expect(within(window).getByText('Quality 45%')).toBeDefined();
+
+    await user.click(
+      within(window).getByRole('button', { name: 'Go to the market' }),
+    );
+    expect(screen.getByRole('dialog', { name: 'Market' })).toBeDefined();
+  });
+
+  it('the market sells what is in storage at the price shown', async () => {
+    const user = userEvent.setup();
+    const { store, tapBuilding } = renderApp();
+    act(() => store.getState().replaceGame(withHarvest(store.getState().game)));
+    tapBuilding('market');
+    const window = screen.getByRole('dialog', { name: 'Market' });
+    expect(
+      within(window).getByRole('button', { name: 'Sell Tomato' }),
+    ).toBeDisabled();
+
+    const game = store.getState().game;
+    const price = cropPrice(game.market, 'strawberry', 0, defaultContent);
+    expect(within(window).getByLabelText('Strawberry price')).toHaveTextContent(
+      price.toFixed(2),
+    );
+    const revenue = Math.round(8 * price * 0.9);
+    const sellButton = within(window).getByRole('button', {
+      name: 'Sell Strawberry',
+    });
+    expect(sellButton).toHaveTextContent(`+${revenue}`);
+
+    await user.click(sellButton);
+    expect(store.getState().game.money).toBe(game.money + revenue);
+    expect(store.getState().game.storage.lots).toEqual([]);
+    expect(screen.getByRole('status')).toHaveTextContent(
+      `Sold 8 × Strawberry for ${revenue}`,
+    );
+  });
+
+  it('closes from the backdrop, but not from the click of the tap that opened it', async () => {
+    const user = userEvent.setup();
     const { tapBuilding } = renderApp();
-    tapBuilding(id);
-    const window = screen.getByRole('dialog', { name: title });
-    expect(within(window).getByText(building)).toBeDefined();
-    expect(within(window).getByText('Under construction')).toBeDefined();
-    expect(screen.getByTestId('game-canvas')).toBeDefined();
+    // The tap on the map: pressed on the canvas, window opened, then the
+    // click that follows the tap lands on the new backdrop.
+    fireEvent.pointerDown(screen.getByTestId('game-canvas'));
+    tapBuilding('storage');
+    const backdrop = screen.getByRole('dialog').parentElement;
+    if (!backdrop) throw new Error('expected a backdrop');
+    fireEvent.click(backdrop);
+    expect(screen.getByRole('dialog', { name: 'Storage' })).toBeDefined();
+
+    await user.click(backdrop);
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('closes a window from its close button or with Escape', async () => {
@@ -197,11 +341,11 @@ describe('welcome back', () => {
   it('lists the crops that became ready', () => {
     const { store, runTicks } = renderApp();
     const greenhouse = firstGreenhouseOf(store);
-    act(() =>
+    act(() => {
       store
         .getState()
-        .plantCrop(greenhouse.id, greenhouse.plots[1]?.id ?? '', 'cucumber'),
-    );
+        .plantCrop(greenhouse.id, greenhouse.plots[1]?.id ?? '', 'cucumber');
+    });
     // The player leaves the app for a while.
     act(() => store.getState().markAway());
     runTicks(24 * 30);
@@ -209,6 +353,16 @@ describe('welcome back', () => {
     expect(within(window).getByText('Ready to harvest')).toBeDefined();
     expect(within(window).getByText('Cucumber')).toBeDefined();
     expect(within(window).getByText('Plot 2')).toBeDefined();
+  });
+
+  it('lists the produce that spoiled in storage', () => {
+    const { store, runTicks } = renderApp();
+    act(() => store.getState().replaceGame(withHarvest(store.getState().game)));
+    act(() => store.getState().markAway());
+    runTicks(100);
+    const window = screen.getByRole('dialog', { name: 'Welcome back!' });
+    expect(within(window).getByText('Spoiled in storage')).toBeDefined();
+    expect(within(window).getByText('8 × Strawberry')).toBeDefined();
   });
 });
 
@@ -230,7 +384,7 @@ describe('save tools', () => {
     expect(readSaveText(text ?? '', defaultContent)).toEqual({
       ok: true,
       state: store.getState().game,
-      fromVersion: 1,
+      fromVersion: STATE_VERSION,
     });
     expect(await screen.findByRole('status')).toHaveTextContent(
       'Save file downloaded',

@@ -77,6 +77,14 @@ export function formatDuration(ms: number): string {
   return hours === 0 ? dayText : `${dayText} ${hours} h`;
 }
 
+/** A rough real-world duration for small labels: "7 min", "1.5 h". */
+export function formatShortDuration(ms: number): string {
+  if (!Number.isFinite(ms)) return 'never';
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.round(minutes / 30) / 2} h`;
+}
+
 /** An estimated real-world duration: "about 2 h 15 min". */
 export function formatRealDuration(ms: number): string {
   return Number.isFinite(ms) ? `about ${formatDuration(ms)}` : 'never';

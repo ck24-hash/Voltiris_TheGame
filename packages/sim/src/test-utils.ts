@@ -8,7 +8,7 @@ import {
   type GameContent,
 } from '@voltiris/content';
 import { createManualClock } from './clock';
-import { applyCommand } from './commands';
+import { applyCommand, type Command } from './commands';
 import { createGame } from './newGame';
 import type { GameState, Greenhouse, Planting } from './state';
 import { tick } from './tick';
@@ -61,6 +61,23 @@ export function withClimate(
   };
 }
 
+/** Applies a command; throws if it is rejected. */
+export function accept(
+  state: GameState,
+  command: Command,
+  content: GameContent = defaultContent,
+): GameState {
+  const result = applyCommand(state, command, content);
+  if (!result.ok) throw new Error(result.error.message);
+  return result.state;
+}
+
+function plotId(state: GameState, plotIndex: number): string {
+  const plot = firstGreenhouse(state).plots[plotIndex];
+  if (!plot) throw new Error(`No plot at index ${plotIndex}`);
+  return plot.id;
+}
+
 /** Plants a crop in the first greenhouse; throws if the command is rejected. */
 export function plant(
   state: GameState,
@@ -68,23 +85,37 @@ export function plant(
   plotIndex = 0,
   content: GameContent = defaultContent,
 ): GameState {
-  const greenhouse = firstGreenhouse(state);
-  const plot = greenhouse.plots[plotIndex];
-  if (!plot) throw new Error(`No plot at index ${plotIndex}`);
-  const result = applyCommand(
+  return accept(
     state,
     {
       type: 'PlantCrop',
       id: `cmd-plant-${plotIndex}`,
       issuedAt: 0,
-      greenhouseId: greenhouse.id,
-      plotId: plot.id,
+      greenhouseId: firstGreenhouse(state).id,
+      plotId: plotId(state, plotIndex),
       cropId,
     },
     content,
   );
-  if (!result.ok) throw new Error(result.error.message);
-  return result.state;
+}
+
+/** Harvests a ready plot of the first greenhouse into storage. */
+export function harvest(
+  state: GameState,
+  plotIndex = 0,
+  content: GameContent = defaultContent,
+): GameState {
+  return accept(
+    state,
+    {
+      type: 'HarvestCrop',
+      id: `cmd-harvest-${plotIndex}`,
+      issuedAt: 0,
+      greenhouseId: firstGreenhouse(state).id,
+      plotId: plotId(state, plotIndex),
+    },
+    content,
+  );
 }
 
 export function runTicks(

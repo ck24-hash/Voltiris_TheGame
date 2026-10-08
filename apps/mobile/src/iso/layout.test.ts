@@ -190,7 +190,7 @@ describe('targetAt', () => {
     expect(targetAt(layout, { x: sign.x, y: sign.y - 40 }, none)).toEqual({
       kind: 'forSale',
     });
-    expect(targetAt(layout, tileCenter({ i: 11, j: 7 }), none)).toBeNull();
+    expect(targetAt(layout, tileCenter({ i: 9, j: 8 }), none)).toBeNull();
   });
 });
 

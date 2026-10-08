@@ -6,8 +6,10 @@ import { createGame } from './newGame';
 import { advance } from './tick';
 import {
   firstGreenhouse,
+  harvest,
   optimalClimate,
   plant,
+  runTicks,
   TEST_PLAYER_ID,
   withClimate,
 } from './test-utils';
@@ -32,32 +34,52 @@ function setup() {
 }
 
 describe('catchUp', () => {
-  it('fast-forwards a 2-hour break exactly like advance, and reports it', () => {
+  it('fast-forwards a 30-minute break exactly like advance, and reports it', () => {
     const { clock, state } = setup();
-    clock.advance(2 * HOUR_MS);
+    clock.advance(HOUR_MS / 2);
 
     const { state: next, report } = catchUp(state, clock, defaultContent);
 
     expect(next).toEqual(advance(state, clock, defaultContent));
-    expect(next.clock.gameHour).toBe(480);
-    // A cucumber needs 20 days (480 h) in a perfect climate; the tomato 30.
+    expect(next.clock.gameHour).toBe(120);
+    // A cucumber needs 24 h in a perfect climate; the tomato much longer.
     const greenhouse = firstGreenhouse(next);
     expect(report).toEqual({
-      awayMs: 2 * HOUR_MS,
-      ticks: 480,
+      awayMs: HOUR_MS / 2,
+      ticks: 120,
       skippedMs: 0,
       cropsReady: [
         {
           greenhouseId: greenhouse.id,
           plotId: greenhouse.plots[0]?.id,
           cropId: 'cucumber',
-          readyAtHour: 480,
+          readyAtHour: 24,
           quality: 1,
           yieldUnits: defaultContent.crops.cucumber.yieldPerPlot,
         },
       ],
+      spoiled: [],
       moneyChange: 0,
     });
+  });
+
+  it('reports harvests that spoiled in storage', () => {
+    const { clock, state } = setup();
+    const ready = runTicks(state, 24);
+    const stored = harvest(ready, 0);
+    // The harvest's whole shelf life passes while the player is away.
+    clock.advance(
+      defaultContent.crops.cucumber.shelfLifeDays * 24 * MS_PER_TICK,
+    );
+
+    const { state: next, report } = catchUp(stored, clock, defaultContent);
+    expect(next.storage.lots).toEqual([]);
+    expect(report.spoiled).toEqual([
+      {
+        cropId: 'cucumber',
+        units: defaultContent.crops.cucumber.yieldPerPlot,
+      },
+    ]);
   });
 
   it('reports the time skipped beyond the 24-hour cap', () => {
@@ -71,7 +93,7 @@ describe('catchUp', () => {
 
   it('only reports crops that became ready during the catch-up', () => {
     const { clock, state } = setup();
-    clock.advance(2 * HOUR_MS);
+    clock.advance(HOUR_MS / 2);
     const first = catchUp(state, clock, defaultContent);
     expect(first.report.cropsReady).toHaveLength(1);
 

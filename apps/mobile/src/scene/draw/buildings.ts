@@ -4,14 +4,21 @@ import { COLORS } from '../palette';
 import { at, cone, flat, INK, isoBox, lerp, onFrontWall } from './shapes';
 
 // Placeholder toon buildings, drawn in world coordinates on their footprint.
-// Each faces the road (+j). Their game modes open in later phases, so traffic
-// cones stand in front of them for now.
+// Each faces the road (+j). Traffic cones stand in front of the ones whose
+// game modes open in later phases.
 
-export function drawBuilding(g: Graphics, building: Building): void {
+export function drawBuilding(
+  g: Graphics,
+  building: Building,
+  underConstruction: boolean,
+): void {
   const f = building.footprint;
   switch (building.id) {
     case 'market':
       drawMarketStall(g, f);
+      break;
+    case 'storage':
+      drawStorageBarn(g, f);
       break;
     case 'energy':
       drawEnergyShed(g, f);
@@ -20,8 +27,10 @@ export function drawBuilding(g: Graphics, building: Building): void {
       drawTownHall(g, f);
       break;
   }
-  cone(g, at(f.i + 0.2, f.j + f.length - 0.05));
-  cone(g, at(f.i + f.width - 0.2, f.j + f.length - 0.05));
+  if (underConstruction) {
+    cone(g, at(f.i + 0.2, f.j + f.length - 0.05));
+    cone(g, at(f.i + f.width - 0.2, f.j + f.length - 0.05));
+  }
 }
 
 /** Point on the ground of `f`, by fractions of its width and length. */
@@ -92,6 +101,99 @@ function drawMarketStall(g: Graphics, f: Footprint): void {
       inside(f, 0.02, 1.02, 62),
     ]),
   ).stroke(INK);
+}
+
+/** A red barn with its gable end and big doors facing the road, crates beside. */
+function drawStorageBarn(g: Graphics, f: Footprint): void {
+  const barn = { i: f.i + 0.2, j: f.j + 0.2, width: 1.6, length: 1.45 };
+  const wallTop = 56;
+  const ridge = 98;
+  isoBox(g, barn, wallTop, {
+    left: COLORS.barnWall,
+    right: COLORS.barnWallDark,
+    top: COLORS.barnWallDark,
+  });
+
+  // Gable end on the front wall, then the roof: ridge along j, eaves on
+  // the sides and the back.
+  const front = barn.j + barn.length;
+  const middle = barn.i + barn.width / 2;
+  g.poly(
+    flat([
+      at(barn.i, front, wallTop),
+      at(barn.i + barn.width, front, wallTop),
+      at(middle, front, ridge),
+    ]),
+  )
+    .fill(COLORS.barnWall)
+    .stroke(INK);
+  const eave = 0.12;
+  const low = wallTop - 6;
+  const [i0, i1, j0] = [
+    barn.i - eave,
+    barn.i + barn.width + eave,
+    barn.j - eave,
+  ];
+  g.poly(
+    flat([
+      at(i0, j0, low),
+      at(i0, front, low),
+      at(middle, front, ridge),
+      at(middle, j0, ridge),
+    ]),
+  )
+    .fill(COLORS.barnRoof)
+    .stroke(INK);
+  g.poly(
+    flat([
+      at(middle, j0, ridge),
+      at(middle, front, ridge),
+      at(i1, front, low),
+      at(i1, j0, low),
+    ]),
+  )
+    .fill(COLORS.barnRoofDark)
+    .stroke(INK);
+
+  // Big double doors with white cross braces, and a hayloft window.
+  const quad = (u0: number, u1: number, v0: number, v1: number) =>
+    flat([
+      onFrontWall(barn, u0, v0),
+      onFrontWall(barn, u1, v0),
+      onFrontWall(barn, u1, v1),
+      onFrontWall(barn, u0, v1),
+    ]);
+  g.poly(quad(0.24, 0.76, 0, 42))
+    .fill(COLORS.barnDoor)
+    .stroke({ ...INK, color: COLORS.barnTrim, width: 3 });
+  for (const [u0, u1] of [
+    [0.24, 0.5],
+    [0.5, 0.76],
+  ] as const) {
+    const bottomLeft = onFrontWall(barn, u0, 0);
+    const topRight = onFrontWall(barn, u1, 42);
+    const bottomRight = onFrontWall(barn, u1, 0);
+    const topLeft = onFrontWall(barn, u0, 42);
+    g.moveTo(bottomLeft.x, bottomLeft.y).lineTo(topRight.x, topRight.y);
+    g.moveTo(bottomRight.x, bottomRight.y).lineTo(topLeft.x, topLeft.y);
+  }
+  g.stroke({ color: COLORS.barnTrim, width: 2.5 });
+  g.poly(quad(0.42, 0.58, 62, 78))
+    .fill(COLORS.barnDoor)
+    .stroke({ ...INK, color: COLORS.barnTrim, width: 2.5 });
+
+  // Crates of produce waiting on either side of the doors.
+  const crate = (i: number, j: number, base = 0) =>
+    isoBox(
+      g,
+      { i, j, width: 0.3, length: 0.28 },
+      18,
+      { left: COLORS.woodLight, right: COLORS.wood, top: COLORS.woodDark },
+      base,
+    );
+  crate(f.i + 0.04, f.j + 1.7);
+  crate(f.i + 1.64, f.j + 1.7);
+  crate(f.i + 1.64, f.j + 1.7, 18);
 }
 
 function drawEnergyShed(g: Graphics, f: Footprint): void {

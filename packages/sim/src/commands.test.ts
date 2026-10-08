@@ -1,15 +1,23 @@
 import { defaultContent, type CropId } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { applyCommand, type Command, type PlantCropCommand } from './commands';
+import { cropPrice } from './market';
 import type { GameState } from './state';
+import { lotQuality } from './storage';
 import {
+  accept,
   deepFreeze,
   firstGreenhouse,
+  harvest,
   newTestGame,
+  optimalClimate,
   plant,
   plantingAt,
   runTicks,
+  withClimate,
 } from './test-utils';
+
+const { crops } = defaultContent;
 
 function plantCommand(
   state: GameState,
@@ -97,5 +105,217 @@ describe('PlantCrop', () => {
     expect(() =>
       applyCommand(state, plantCommand(state), defaultContent),
     ).not.toThrow();
+  });
+
+  it('pays for the seeds', () => {
+    const state = newTestGame();
+    const planted = plant(state, 'pepper');
+    expect(planted.money).toBe(state.money - crops.pepper.seedCost);
+  });
+
+  it('refuses seeds the player cannot afford', () => {
+    const state = { ...newTestGame(), money: crops.tomato.seedCost - 1 };
+    const result = applyCommand(state, plantCommand(state), defaultContent);
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'NOT_ENOUGH_MONEY' },
+    });
+  });
+});
+
+describe.each([
+  ['Water', 'water'],
+  ['Fertilize', 'nutrients'],
+] as const)('%s', (type, resource) => {
+  const { amount, cost, max } = defaultContent.care[resource];
+
+  function command(state: GameState, greenhouseId?: string): Command {
+    return {
+      type,
+      id: 'cmd-1',
+      issuedAt: 0,
+      greenhouseId: greenhouseId ?? firstGreenhouse(state).id,
+    };
+  }
+
+  function level(state: GameState): number {
+    return firstGreenhouse(state).climate[resource];
+  }
+
+  it(`raises the greenhouse ${resource} for a small fee`, () => {
+    const state = newTestGame();
+    const next = accept(state, command(state));
+    expect(level(next)).toBeCloseTo(level(state) + amount, 12);
+    expect(next.money).toBe(state.money - cost);
+  });
+
+  it(`never raises ${resource} above its maximum`, () => {
+    const state = withClimate(newTestGame(), { [resource]: max - amount / 2 });
+    expect(level(accept(state, command(state)))).toBe(max);
+  });
+
+  it.each([
+    ['ALREADY_FULL', (s: GameState) => withClimate(s, { [resource]: max })],
+    ['NOT_ENOUGH_MONEY', (s: GameState) => ({ ...s, money: cost - 1 })],
+  ] as const)('rejects with %s', (code, edit) => {
+    const state = edit(newTestGame());
+    expect(applyCommand(state, command(state), defaultContent)).toMatchObject({
+      ok: false,
+      error: { code },
+    });
+  });
+
+  it('rejects an unknown greenhouse', () => {
+    const state = newTestGame();
+    expect(
+      applyCommand(state, command(state, 'nope'), defaultContent),
+    ).toMatchObject({ ok: false, error: { code: 'GREENHOUSE_NOT_FOUND' } });
+  });
+});
+
+describe('HarvestCrop', () => {
+  /** A ready cucumber in plot 0, picked at hour 30. */
+  function readyCucumber(): GameState {
+    const game = withClimate(newTestGame(), optimalClimate('cucumber'));
+    return runTicks(plant(game, 'cucumber'), 30);
+  }
+
+  function harvestCommand(state: GameState, plotIndex = 0): Command {
+    const greenhouse = firstGreenhouse(state);
+    return {
+      type: 'HarvestCrop',
+      id: 'cmd-1',
+      issuedAt: 0,
+      greenhouseId: greenhouse.id,
+      plotId: greenhouse.plots[plotIndex]?.id ?? '',
+    };
+  }
+
+  it('moves a ready crop into storage and empties the plot', () => {
+    const state = readyCucumber();
+    const ready = plantingAt(state);
+    if (ready?.status !== 'ready') throw new Error('expected a ready crop');
+
+    const next = harvest(state);
+    expect(plantingAt(next)).toBeNull();
+    expect(next.storage.lots).toEqual([
+      {
+        id: expect.any(String) as string,
+        cropId: 'cucumber',
+        units: ready.yieldUnits,
+        quality: ready.quality,
+        harvestedAtHour: 30,
+      },
+    ]);
+    expect(next.money).toBe(state.money);
+  });
+
+  it('gives each harvest its own id from the seeded rng', () => {
+    let state = readyCucumber();
+    state = harvest(state);
+    state = runTicks(plant(state, 'cucumber'), 30);
+    const twice = harvest(state);
+    const [first, second] = twice.storage.lots;
+    expect(first?.id).not.toBe(second?.id);
+    expect(twice.rng).not.toEqual(state.rng);
+  });
+
+  it.each([
+    ['PLOT_EMPTY', 1],
+    ['PLOT_NOT_FOUND', 9],
+  ] as const)('rejects with %s', (code, plotIndex) => {
+    const state = readyCucumber();
+    expect(
+      applyCommand(state, harvestCommand(state, plotIndex), defaultContent),
+    ).toMatchObject({ ok: false, error: { code } });
+  });
+
+  it('rejects a crop that is still growing', () => {
+    const state = plant(newTestGame(), 'pepper');
+    expect(
+      applyCommand(state, harvestCommand(state), defaultContent),
+    ).toMatchObject({ ok: false, error: { code: 'NOT_READY' } });
+  });
+
+  it('rejects a harvest that does not fit in storage', () => {
+    const state = readyCucumber();
+    const room = crops.cucumber.yieldPerPlot - 1;
+    const full: GameState = {
+      ...state,
+      storage: {
+        lots: [
+          {
+            id: 'lot-full',
+            cropId: 'pepper',
+            units: defaultContent.storage.capacity - room,
+            quality: 1,
+            harvestedAtHour: 30,
+          },
+        ],
+      },
+    };
+    expect(
+      applyCommand(full, harvestCommand(full), defaultContent),
+    ).toMatchObject({ ok: false, error: { code: 'STORAGE_FULL' } });
+  });
+});
+
+describe('SellCrop', () => {
+  /** 12 cucumbers in storage, harvested at hour 30. */
+  function stocked(): GameState {
+    const game = withClimate(newTestGame(), optimalClimate('cucumber'));
+    return harvest(runTicks(plant(game, 'cucumber'), 30));
+  }
+
+  function sellCommand(cropId: CropId, units: number): Command {
+    return { type: 'SellCrop', id: 'cmd-1', issuedAt: 0, cropId, units };
+  }
+
+  it("sells at today's price, for the produce's quality and freshness", () => {
+    const state = runTicks(stocked(), 10);
+    const [lot] = state.storage.lots;
+    if (!lot) throw new Error('expected a harvest in storage');
+    const { gameHour } = state.clock;
+    const price = cropPrice(state.market, 'cucumber', gameHour, defaultContent);
+    const quality = lotQuality(lot, gameHour, crops.cucumber);
+
+    const next = accept(state, sellCommand('cucumber', 5));
+    expect(next.money).toBe(state.money + Math.round(5 * price * quality));
+    expect(next.storage.lots).toEqual([{ ...lot, units: lot.units - 5 }]);
+  });
+
+  it.each([
+    ['INVALID_AMOUNT', 'cucumber', 0],
+    ['INVALID_AMOUNT', 'cucumber', 1.5],
+    ['NOT_ENOUGH_STOCK', 'cucumber', 13],
+    ['NOT_ENOUGH_STOCK', 'tomato', 1],
+    ['UNKNOWN_CROP', 'banana', 1],
+  ] as const)('rejects with %s (%s × %d)', (code, cropId, units) => {
+    const state = stocked();
+    expect(
+      applyCommand(state, sellCommand(cropId as CropId, units), defaultContent),
+    ).toMatchObject({ ok: false, error: { code } });
+  });
+});
+
+describe('every command', () => {
+  it('leaves the input state untouched', () => {
+    const game = withClimate(newTestGame(), optimalClimate('cucumber'));
+    const ready = deepFreeze(runTicks(plant(game, 'cucumber'), 30));
+    const stored = deepFreeze(harvest(runTicks(plant(game, 'cucumber'), 30)));
+    const greenhouseId = firstGreenhouse(ready).id;
+    const plotId = firstGreenhouse(ready).plots[0]?.id ?? '';
+    const meta = { id: 'cmd-1', issuedAt: 0 };
+    expect(() => {
+      accept(ready, { ...meta, type: 'Water', greenhouseId });
+      accept(ready, { ...meta, type: 'Fertilize', greenhouseId });
+      accept(ready, { ...meta, type: 'HarvestCrop', greenhouseId, plotId });
+      accept(stored, {
+        ...meta,
+        type: 'SellCrop',
+        cropId: 'cucumber',
+        units: 1,
+      });
+    }).not.toThrow();
   });
 });

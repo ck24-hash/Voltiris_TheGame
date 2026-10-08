@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { cx } from './cx';
 import styles from './GameWindow.module.css';
 
@@ -28,14 +28,28 @@ export function GameWindow({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // A tap on a building opens its window as the finger lifts; the click that
+  // follows lands on this backdrop. Only a press that started here closes it.
+  const pressedBackdrop = useRef(false);
+
   return (
-    <div className={styles.backdrop} onClick={onClose}>
+    <div
+      className={styles.backdrop}
+      onPointerDown={(e) => {
+        pressedBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (pressedBackdrop.current && e.target === e.currentTarget) {
+          onClose?.();
+        }
+        pressedBackdrop.current = false;
+      }}
+    >
       <section
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={cx(styles.window, styles[tone])}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className={styles.banner}>
           {icon && <span className={styles.icon}>{icon}</span>}

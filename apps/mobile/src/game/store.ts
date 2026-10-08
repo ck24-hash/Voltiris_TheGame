@@ -53,17 +53,24 @@ export interface GameStore {
    */
   readonly awayPending: boolean;
   readonly notice: Notice | null;
-  readonly lastError: CommandError | null;
   /** Goes up whenever the game must be saved right away. */
   readonly checkpoint: number;
   // Actions are arrow-typed properties: components pull them off the store.
   /** Runs every tick that is due by now. */
   readonly advance: () => void;
+  // Player commands return why the sim refused them, or null if it accepted.
   readonly plantCrop: (
     greenhouseId: string,
     plotId: string,
     cropId: CropId,
-  ) => void;
+  ) => CommandError | null;
+  readonly water: (greenhouseId: string) => CommandError | null;
+  readonly fertilize: (greenhouseId: string) => CommandError | null;
+  readonly harvestCrop: (
+    greenhouseId: string,
+    plotId: string,
+  ) => CommandError | null;
+  readonly sellCrop: (cropId: CropId, units: number) => CommandError | null;
   readonly selectPlot: (selection: PlotSelection | null) => void;
   readonly openWindow: (window: GameWindow) => void;
   readonly closeWindow: () => void;
@@ -104,7 +111,9 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
       return state;
     };
 
-    const run = (build: (meta: CommandMeta) => Command) => {
+    const run = (
+      build: (meta: CommandMeta) => Command,
+    ): CommandError | null => {
       // Read the clock once: catch up to that instant, so the command lands
       // at the game hour its timestamp belongs to (a replay must agree).
       const now = clock.now();
@@ -114,15 +123,9 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
         build({ id: newId(), issuedAt: now }),
         content,
       );
-      set(
-        result.ok
-          ? {
-              game: result.state,
-              lastError: null,
-              checkpoint: get().checkpoint + 1,
-            }
-          : { lastError: result.error },
-      );
+      if (!result.ok) return result.error;
+      set({ game: result.state, checkpoint: get().checkpoint + 1 });
+      return null;
     };
 
     let noticeId = 0;
@@ -135,25 +138,35 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
       away: null,
       awayPending: true,
       notice: null,
-      lastError: null,
       checkpoint: 0,
 
       advance: () => {
         catchUpTo(clock.now());
       },
 
-      plantCrop: (greenhouseId, plotId, cropId) => {
+      plantCrop: (greenhouseId, plotId, cropId) =>
         run((meta) => ({
           ...meta,
           type: 'PlantCrop',
           greenhouseId,
           plotId,
           cropId,
-        }));
-      },
+        })),
+
+      water: (greenhouseId) =>
+        run((meta) => ({ ...meta, type: 'Water', greenhouseId })),
+
+      fertilize: (greenhouseId) =>
+        run((meta) => ({ ...meta, type: 'Fertilize', greenhouseId })),
+
+      harvestCrop: (greenhouseId, plotId) =>
+        run((meta) => ({ ...meta, type: 'HarvestCrop', greenhouseId, plotId })),
+
+      sellCrop: (cropId, units) =>
+        run((meta) => ({ ...meta, type: 'SellCrop', cropId, units })),
 
       selectPlot: (selection) => {
-        set({ selection, lastError: null });
+        set({ selection });
       },
 
       openWindow: (window) => {
@@ -186,7 +199,6 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
           selection: null,
           window: null,
           away: null,
-          lastError: null,
           checkpoint: get().checkpoint + 1,
         });
       },
@@ -205,6 +217,7 @@ function mergeReports(
     ticks: earlier.ticks + later.ticks,
     skippedMs: earlier.skippedMs + later.skippedMs,
     cropsReady: [...earlier.cropsReady, ...later.cropsReady],
+    spoiled: [...earlier.spoiled, ...later.spoiled],
     moneyChange: earlier.moneyChange + later.moneyChange,
   };
 }

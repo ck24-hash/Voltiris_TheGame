@@ -1,5 +1,6 @@
 import {
   CLIMATE_VARIABLES,
+  CROP_IDS,
   type Climate,
   type CropId,
   type GameContent,
@@ -8,8 +9,11 @@ import {
   STATE_VERSION,
   type GameState,
   type Greenhouse,
+  type Market,
   type Planting,
   type Plot,
+  type Storage,
+  type StoredLot,
 } from './state';
 
 /** A saved game as raw JSON data, before it is checked. */
@@ -22,8 +26,28 @@ export type RawState = Readonly<Record<string, unknown>>;
  */
 export type Migration = (old: RawState) => RawState;
 
-/** Add one entry here, with a test, every time STATE_VERSION goes up. */
-export const MIGRATIONS: Readonly<Record<number, Migration>> = {};
+/**
+ * Add one entry here, with a test, every time STATE_VERSION goes up. A
+ * migration is a snapshot of history: it spells out its values rather than
+ * reading today's content, which may have changed since.
+ */
+export const MIGRATIONS: Readonly<Record<number, Migration>> = {
+  // Phase 5: an empty storage and a calm market.
+  1: (old) => ({
+    ...old,
+    version: 2,
+    storage: { lots: [] },
+    market: {
+      swings: {
+        microgreens: 1,
+        cucumber: 1,
+        strawberry: 1,
+        tomato: 1,
+        pepper: 1,
+      },
+    },
+  }),
+};
 
 export type RestoreErrorCode =
   'NOT_A_SAVE' | 'TOO_NEW' | 'NO_MIGRATION' | 'INVALID';
@@ -148,6 +172,19 @@ function number(value: unknown, path: string, min = -Infinity): number {
   return value;
 }
 
+/** 0 to 1. */
+function fraction(value: unknown, path: string): number {
+  const n = number(value, path, 0);
+  if (n > 1) invalid(path, 'at most 1');
+  return n;
+}
+
+function positive(value: unknown, path: string): number {
+  const n = number(value, path);
+  if (n <= 0) invalid(path, 'a number above 0');
+  return n;
+}
+
 function wholeNumber(value: unknown, path: string, min: number): number {
   const n = number(value, path, min);
   if (!Number.isInteger(n)) invalid(path, 'a whole number');
@@ -185,6 +222,42 @@ function readGameState(raw: RawState, content: GameContent): GameState {
     greenhouses: list(raw.greenhouses, 'greenhouses').map((g, k) =>
       readGreenhouse(g, `greenhouses[${k}]`, content),
     ),
+    storage: readStorage(raw.storage, content),
+    market: readMarket(raw.market),
+  };
+}
+
+function readStorage(raw: unknown, content: GameContent): Storage {
+  const storage = record(raw, 'storage');
+  return {
+    lots: list(storage.lots, 'storage.lots').map((l, k) =>
+      readLot(l, `storage.lots[${k}]`, content),
+    ),
+  };
+}
+
+function readLot(raw: unknown, path: string, content: GameContent): StoredLot {
+  const lot = record(raw, path);
+  return {
+    id: text(lot.id, `${path}.id`),
+    cropId: cropId(lot.cropId, `${path}.cropId`, content),
+    units: wholeNumber(lot.units, `${path}.units`, 1),
+    quality: fraction(lot.quality, `${path}.quality`),
+    harvestedAtHour: wholeNumber(
+      lot.harvestedAtHour,
+      `${path}.harvestedAtHour`,
+      0,
+    ),
+  };
+}
+
+function readMarket(raw: unknown): Market {
+  const market = record(raw, 'market');
+  const swings = record(market.swings, 'market.swings');
+  return {
+    swings: Object.fromEntries(
+      CROP_IDS.map((id) => [id, positive(swings[id], `market.swings.${id}`)]),
+    ) as Record<CropId, number>,
   };
 }
 
@@ -240,8 +313,6 @@ function readPlanting(
     case 'growing':
       return { status: 'growing', ...base };
     case 'ready': {
-      const quality = number(planting.quality, `${path}.quality`, 0);
-      if (quality > 1) invalid(`${path}.quality`, 'at most 1');
       return {
         status: 'ready',
         ...base,
@@ -250,7 +321,7 @@ function readPlanting(
           `${path}.readyAtHour`,
           0,
         ),
-        quality,
+        quality: fraction(planting.quality, `${path}.quality`),
         yieldUnits: number(planting.yieldUnits, `${path}.yieldUnits`, 0),
       };
     }

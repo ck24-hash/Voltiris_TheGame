@@ -1,0 +1,149 @@
+/* Shared by the market and storage windows. */
+
+.intro {
+  margin-top: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 8px 6px 6px;
+  border: 2px solid var(--cream-dark);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--cream-dark);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.name {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.name strong {
+  font-weight: 700;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag {
+  flex-basis: 100%;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+
+.up {
+  background: var(--good);
+}
+
+.down {
+  background: var(--warn);
+}
+
+.action {
+  flex: none;
+  min-width: 96px;
+}
+
+.earn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 4px;
+  font-size: 13px;
+}
+
+.capacity {
+  position: relative;
+  height: 24px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border: 2.5px solid var(--wood-dark);
+  border-radius: 12px;
+  background: var(--cream-dark);
+}
+
+.capacityFill {
+  height: 100%;
+  background: linear-gradient(to bottom, var(--red-light), var(--red));
+}
+
+.capacityText {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: var(--text-outline);
+}
+
+.freshness {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  flex: none;
+}
+
+.freshBar {
+  display: block;
+  width: 72px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--cream-dark);
+}
+
+.freshFill {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}

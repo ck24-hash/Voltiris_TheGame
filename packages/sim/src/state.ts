@@ -5,7 +5,7 @@ import type { RngState } from './rng';
  * Save schema version. Bump it and add a migration (with a test) whenever the
  * shape of GameState changes.
  */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export interface GameState {
   readonly version: number;
@@ -13,8 +13,35 @@ export interface GameState {
   readonly playerId: string;
   readonly clock: GameClock;
   readonly rng: RngState;
+  /** Volticoins, always a whole number. */
   readonly money: number;
   readonly greenhouses: readonly Greenhouse[];
+  readonly storage: Storage;
+  readonly market: Market;
+}
+
+export interface Storage {
+  /** Harvests waiting to be sold, oldest first. */
+  readonly lots: readonly StoredLot[];
+}
+
+/** One harvest in storage. */
+export interface StoredLot {
+  readonly id: string;
+  readonly cropId: CropId;
+  /** Whole units. */
+  readonly units: number;
+  /** 0–1, from how the crop grew. Freshness then falls with time. */
+  readonly quality: number;
+  readonly harvestedAtHour: number;
+}
+
+export interface Market {
+  /**
+   * Per crop, the market's current swing around the seasonal price (1 is
+   * normal). Crop prices are base price × season × swing.
+   */
+  readonly swings: Readonly<Record<CropId, number>>;
 }
 
 export interface GameClock {

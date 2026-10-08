@@ -23,10 +23,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A new game whose greenhouse is perfect for cucumbers. */
-function newCucumberGame(clock: Clock): GameState {
+/** A new game whose greenhouse is perfect for tomatoes. */
+function newTomatoGame(clock: Clock): GameState {
   const game = createGame({ playerId: 'player', seed: 3 }, content, clock);
-  const bands = content.crops.cucumber.climate;
+  const bands = content.crops.tomato.climate;
   const climate = Object.fromEntries(
     CLIMATE_VARIABLES.map((v) => [
       v,
@@ -53,8 +53,9 @@ describe('closing and reopening the app', () => {
     const db = { indexedDB: new IDBFactory(), IDBKeyRange };
     const app = createFakeLifecycle();
 
-    // Session 1: plant a cucumber and play for 10 minutes.
-    const first = storeFor(newCucumberGame(clock), clock);
+    // Session 1: plant a tomato and microgreens, play for 10 minutes and
+    // harvest the microgreens.
+    const first = storeFor(newTomatoGame(clock), clock);
     const stopLoop = startGameLoop(first, { lifecycle: app.lifecycle });
     const autosave = startAutosave({
       store: first,
@@ -62,12 +63,13 @@ describe('closing and reopening the app', () => {
       now: () => clock.now(),
       lifecycle: app.lifecycle,
     });
-    const greenhouse = first.getState().game.greenhouses[0];
-    const plot = greenhouse?.plots[0];
-    first
-      .getState()
-      .plantCrop(greenhouse?.id ?? '', plot?.id ?? '', 'cucumber');
+    const greenhouseId = first.getState().game.greenhouses[0]?.id ?? '';
+    const [tomato, greens] = first.getState().game.greenhouses[0]?.plots ?? [];
+    const { plantCrop, harvestCrop } = first.getState();
+    expect(plantCrop(greenhouseId, tomato?.id ?? '', 'tomato')).toBeNull();
+    expect(plantCrop(greenhouseId, greens?.id ?? '', 'microgreens')).toBeNull();
     await vi.advanceTimersByTimeAsync(10 * MINUTE);
+    expect(harvestCrop(greenhouseId, greens?.id ?? '')).toBeNull();
 
     // The player leaves: the app is hidden, saves, and is closed.
     app.hide();
@@ -98,18 +100,27 @@ describe('closing and reopening the app', () => {
     const { game, away } = second.getState();
     expect(game).toEqual(twin.getState().game);
     expect(game.clock.gameHour).toBe(40 + 480);
+    // The tomato ripened while the player was away (it needs exactly its
+    // growth hours in a perfect climate); the microgreens left in storage
+    // went off.
     expect(away).toEqual({
       awayMs: 2 * HOUR,
       ticks: 480,
       skippedMs: 0,
       cropsReady: [
         {
-          greenhouseId: greenhouse?.id,
-          plotId: plot?.id,
-          cropId: 'cucumber',
-          readyAtHour: 480,
+          greenhouseId,
+          plotId: tomato?.id,
+          cropId: 'tomato',
+          readyAtHour: content.crops.tomato.growthHours,
           quality: 1,
-          yieldUnits: content.crops.cucumber.yieldPerPlot,
+          yieldUnits: content.crops.tomato.yieldPerPlot,
+        },
+      ],
+      spoiled: [
+        {
+          cropId: 'microgreens',
+          units: content.crops.microgreens.yieldPerPlot,
         },
       ],
       moneyChange: 0,

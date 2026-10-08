@@ -1,4 +1,5 @@
 import { defaultContent } from '@voltiris/content';
+import { STATE_VERSION } from '@voltiris/sim';
 import { describe, expect, it } from 'vitest';
 import { createTestStore } from '../game/test-utils';
 import { loadGame } from './loadGame';
@@ -75,7 +76,7 @@ describe('save text', () => {
     expect(readSaveText(saveFileToText(good), defaultContent)).toEqual({
       ok: true,
       state: game,
-      fromVersion: 1,
+      fromVersion: STATE_VERSION,
     });
   });
 

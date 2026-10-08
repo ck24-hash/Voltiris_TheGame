@@ -6,7 +6,6 @@ import {
   type GrowthConfig,
 } from '@voltiris/content';
 import type { GrowingPlanting, Planting } from './state';
-import { HOURS_PER_DAY } from './time';
 
 /** 1 inside the optimal band, falling linearly to 0 at the limits. */
 export function climateFactor(value: number, r: ClimateResponse): number {
@@ -68,7 +67,7 @@ export function cropQuality(
 }
 
 export function requiredGrowthHours(crop: CropDef): number {
-  return crop.growthDays * HOURS_PER_DAY;
+  return crop.growthHours;
 }
 
 /** Growth progress from 0 to 1. */

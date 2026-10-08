@@ -7,12 +7,13 @@ import {
   formatPercent,
 } from '../game/format';
 import { CROP_ICONS } from '../game/selectors';
-import type { BuildingId } from '../iso/layout';
 import { BUILDING_INFO } from './buildingInfo';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
 import { ConeIcon } from './icons';
+import { MarketWindow } from './MarketWindow';
 import { SettingsWindow } from './SettingsWindow';
+import { StorageWindow } from './StorageWindow';
 import styles from './Windows.module.css';
 
 /** The window on top of the map, if any. The welcome back summary comes first. */
@@ -20,18 +21,27 @@ export function Windows() {
   const window = useGame((s) => s.window);
   const away = useGame((s) => s.away);
   if (away) return <AwayWindow report={away} />;
-  if (window === 'settings') return <SettingsWindow />;
-  if (window) return <BuildingWindow id={window} />;
-  return null;
+  switch (window) {
+    case null:
+      return null;
+    case 'settings':
+      return <SettingsWindow />;
+    case 'market':
+      return <MarketWindow />;
+    case 'storage':
+      return <StorageWindow />;
+    default:
+      return <BuildingWindow id={window} />;
+  }
 }
 
 const BUILDING_TONES = {
-  market: 'gold',
   energy: 'blue',
   village: 'green',
 } as const;
 
-function BuildingWindow({ id }: { id: BuildingId }) {
+/** A building whose game mode opens in a later phase. */
+function BuildingWindow({ id }: { id: keyof typeof BUILDING_TONES }) {
   const closeWindow = useGame((s) => s.closeWindow);
   const info = BUILDING_INFO[id];
   return (
@@ -88,6 +98,26 @@ function AwayWindow({ report }: { report: CatchUpReport }) {
         </section>
       ) : (
         <p>All quiet: your crops kept growing.</p>
+      )}
+      {report.spoiled.length > 0 && (
+        <section className={styles.section}>
+          <h3>Spoiled in storage</h3>
+          <ul className={styles.ready}>
+            {report.spoiled.map((lot, k) => (
+              <li key={k}>
+                <span className={styles.cropIcon} aria-hidden="true">
+                  {CROP_ICONS[lot.cropId]}
+                </span>
+                <strong>
+                  {lot.units} × {crops[lot.cropId].name}
+                </strong>
+              </li>
+            ))}
+          </ul>
+          <p className={styles.note}>
+            Sell your harvest before you leave: it keeps better on the plant.
+          </p>
+        </section>
       )}
       {report.moneyChange !== 0 && (
         <p>

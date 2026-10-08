@@ -29,8 +29,8 @@ test('opens on the map with the HUD, the climate and the buildings', async ({
   await expect(page.getByText('Day 1 · 00:00')).toBeVisible();
   await expect(page.getByLabel('500 Volticoins')).toBeVisible();
   await expect(page.getByRole('group')).toHaveCount(6);
-  for (const name of ['Market', 'Energy', 'Village']) {
-    await expect(page.getByRole('button', { name })).toBeVisible();
+  for (const name of ['Market', 'Storage', 'Energy', 'Village']) {
+    await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
   }
   await snapshot(page, info, 'map');
 });
@@ -73,15 +73,60 @@ test('opens the game modes from the buildings on the map', async ({
   await openGame(page);
   await tap(page, buildingOnScreen(page, 'market'));
   const market = page.getByRole('dialog', { name: 'Market' });
-  await expect(market).toContainText('Market stall');
+  await expect(market).toContainText('Prices change every hour');
   await snapshot(page, info, 'market-window');
   await market.getByRole('button', { name: 'Close' }).click();
   await expect(market).toBeHidden();
 
-  await page.getByRole('button', { name: 'Village' }).click();
+  await tap(page, buildingOnScreen(page, 'storage'));
+  const storage = page.getByRole('dialog', { name: 'Storage' });
+  await expect(storage).toContainText('0 / 150 units');
+  await storage.getByRole('button', { name: 'Close' }).click();
+
+  await page.getByRole('button', { name: 'Village', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Village' })).toContainText(
     'Town hall',
   );
+});
+
+// Phase 5 "Done when": a new player plants, harvests and sells, and makes a
+// profit within the first 10 minutes.
+test('plants, harvests and sells for a profit within minutes', async ({
+  page,
+}, info) => {
+  await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
+  await openGame(page);
+  await tap(page, plotOnScreen(page, 0));
+  const bubble = page.getByRole('dialog', { name: 'Plot 1' });
+  await bubble.getByRole('button', { name: 'Plant Microgreens' }).click();
+  await expect(page.getByLabel('497 Volticoins')).toBeVisible();
+
+  // Microgreens take 2 minutes in the starting greenhouse.
+  await page.clock.fastForward(3 * 60_000);
+  await expect(bubble).toContainText('Ready!');
+  await snapshot(page, info, 'ready-bubble');
+  await bubble.getByRole('button', { name: 'Harvest' }).click();
+  // The plot is free again.
+  await expect(bubble).toContainText('Pick a seed');
+
+  await tap(page, buildingOnScreen(page, 'market'));
+  const market = page.getByRole('dialog', { name: 'Market' });
+  await expect(market).toContainText('6 in storage');
+  await snapshot(page, info, 'market-with-harvest');
+  await market.getByRole('button', { name: 'Sell Microgreens' }).click();
+  await expect(market).toContainText('None in storage');
+
+  // The money label, not the toast, which may come and go before it is read.
+  await expect
+    .poll(async () =>
+      Number(
+        await page
+          .getByLabel(/Volticoins$/)
+          .first()
+          .textContent(),
+      ),
+    )
+    .toBeGreaterThan(500);
 });
 
 test('says land for sale comes later', async ({ page }) => {
