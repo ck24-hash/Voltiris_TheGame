@@ -28,6 +28,15 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - `npm run cap:sync -w @voltiris/mobile` – build and copy web assets into android/ and ios/
 - `npm run android -w @voltiris/mobile` – build, sync and run on an Android emulator/device
 
+## Sim API (packages/sim)
+
+- `createGame({ playerId, seed }, content, clock)` – new GameState (ids come from the seeded RNG)
+- `applyCommand(state, command, content)` – `{ ok: true, state }` or `{ ok: false, error }`; rejected commands leave state untouched
+- `tick(state, content)` – exactly one in-game hour
+- `advance(state, clock, content)` – runs every tick due by `clock.now()`; call it before applying a command
+- Content is always passed in (`defaultContent` from @voltiris/content), so tests and balance scripts can use their own
+- Sim tests share helpers in `packages/sim/src/test-utils.ts`
+
 ## Notes
 
 - Workspaces import each other's TypeScript source directly (package `exports` point to `src/index.ts`); there is no per-package build.
