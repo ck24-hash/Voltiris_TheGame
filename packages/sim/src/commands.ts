@@ -18,7 +18,11 @@ export interface PlantCropCommand extends CommandMeta {
 export type Command = PlantCropCommand;
 
 export type CommandErrorCode =
-  'GREENHOUSE_NOT_FOUND' | 'PLOT_NOT_FOUND' | 'PLOT_OCCUPIED' | 'UNKNOWN_CROP';
+  | 'UNKNOWN_COMMAND'
+  | 'GREENHOUSE_NOT_FOUND'
+  | 'PLOT_NOT_FOUND'
+  | 'PLOT_OCCUPIED'
+  | 'UNKNOWN_CROP';
 
 export interface CommandError {
   readonly code: CommandErrorCode;
@@ -42,6 +46,11 @@ export function applyCommand(
   switch (command.type) {
     case 'PlantCrop':
       return plantCrop(state, command, content);
+    default: {
+      // Unreachable for typed callers; commands may come from untrusted input later.
+      const { type } = command as { type?: unknown };
+      return fail('UNKNOWN_COMMAND', `Unknown command type "${String(type)}"`);
+    }
   }
 }
 

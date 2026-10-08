@@ -43,7 +43,20 @@ export interface PlantLook {
 }
 
 const SEEDLING_BELOW = 0.12;
+const SEEDLING_HEIGHT = 20;
 const FRUIT_FROM = 0.55;
+
+const vineHeight = (growth: number) => 26 + 66 * growth;
+const pepperRadius = (growth: number) => 9 + 13 * growth;
+
+/** How far the drawn plant reaches above its tile centre; used for tap targets. */
+export function plantHeight(look: PlantLook): number {
+  if (!look.ready && look.progress < SEEDLING_BELOW) return SEEDLING_HEIGHT;
+  const growth = look.ready ? 1 : look.progress;
+  return look.cropId === 'pepper'
+    ? 2.2 * pepperRadius(growth) + 4
+    : vineHeight(growth) + 12;
+}
 
 export function drawPlant(g: Graphics, look: PlantLook): void {
   g.clear();
@@ -80,7 +93,7 @@ function drawVine(
   ready: boolean,
   crop: 'tomato' | 'cucumber',
 ): void {
-  const height = 26 + 66 * growth;
+  const height = vineHeight(growth);
   const leafRadius = (crop === 'cucumber' ? 10 : 8) + 4 * growth;
   const leaves = 2 + Math.round(growth * 4);
 
@@ -138,7 +151,7 @@ function drawVine(
 
 /** Peppers: a round bush with bell-shaped fruit. */
 function drawPepper(g: Graphics, growth: number, ready: boolean): void {
-  const radius = 9 + 13 * growth;
+  const radius = pepperRadius(growth);
   const centerY = -radius - 4;
   toonCircle(
     g,

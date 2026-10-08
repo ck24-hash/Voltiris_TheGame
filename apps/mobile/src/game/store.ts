@@ -43,11 +43,13 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
 
   return createStore<GameStore>()((set, get) => {
     const run = (build: (meta: CommandMeta) => Command) => {
-      // Catch up first, so the command lands at the current game hour.
-      const game = advanceGame(get().game, clock, content);
+      // Read the clock once: catch up to that instant, so the command lands
+      // at the game hour its timestamp belongs to (a replay must agree).
+      const now = clock.now();
+      const game = advanceGame(get().game, { now: () => now }, content);
       const result = applyCommand(
         game,
-        build({ id: newId(), issuedAt: clock.now() }),
+        build({ id: newId(), issuedAt: now }),
         content,
       );
       set(

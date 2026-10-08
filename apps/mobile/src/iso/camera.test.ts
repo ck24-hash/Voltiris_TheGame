@@ -4,6 +4,7 @@ import {
   containerTransform,
   fitCamera,
   panCamera,
+  pinchCamera,
   screenToWorld,
   worldToScreen,
   zoomCameraAt,
@@ -50,6 +51,21 @@ describe('camera', () => {
     expect(zoomed.zoom).toBeCloseTo(1.8, 10);
     expect(after.x).toBeCloseTo(before.x, 10);
     expect(after.y).toBeCloseTo(before.y, 10);
+  });
+
+  it('keeps the world under the fingers during a pinch', () => {
+    // One finger stays at (100, 200), the other spreads from 200 to 300.
+    const from = { x: 150, y: 200 };
+    const to = { x: 200, y: 200 };
+    const grabbed = screenToWorld(from, cam, vp);
+    const next = pinchCamera(cam, vp, from, to, 2, {
+      ...limits,
+      maxZoom: 4,
+    });
+    expect(next.zoom).toBeCloseTo(3, 10);
+    const now = worldToScreen(grabbed, next, vp);
+    expect(now.x).toBeCloseTo(to.x, 10);
+    expect(now.y).toBeCloseTo(to.y, 10);
   });
 
   it('clamps zoom and position to the limits', () => {

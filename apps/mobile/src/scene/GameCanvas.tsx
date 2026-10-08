@@ -1,6 +1,6 @@
 import { Application, extend } from '@pixi/react';
 import type { CropDef, CropId } from '@voltiris/content';
-import { growthProgress, type Greenhouse } from '@voltiris/sim';
+import { growthProgress, type Greenhouse, type Planting } from '@voltiris/sim';
 import { Container, Graphics, type Application as PixiApp } from 'pixi.js';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from '../game/context';
@@ -18,7 +18,12 @@ import {
 } from './draw/equipment';
 import { drawGround } from './draw/ground';
 import { drawGreenhouseBack, drawGreenhouseFront } from './draw/greenhouse';
-import { drawPlant, drawPlot } from './draw/plants';
+import {
+  drawPlant,
+  drawPlot,
+  plantHeight,
+  type PlantLook,
+} from './draw/plants';
 import styles from './GameCanvas.module.css';
 import { COLORS } from './palette';
 import { useCamera } from './useCamera';
@@ -28,6 +33,20 @@ extend({ Container, Graphics });
 /** Plant drawings change in 5% steps, so plants redraw at most 20 times. */
 const PROGRESS_STEPS = 20;
 const MAX_RESOLUTION = 2;
+
+/** What to draw for a planting; shared by drawing and tap targets. */
+function plantLook(
+  planting: Planting | null,
+  crops: Readonly<Record<CropId, CropDef>>,
+): PlantLook | null {
+  if (!planting) return null;
+  const progress = growthProgress(planting, crops[planting.cropId]);
+  return {
+    cropId: planting.cropId,
+    progress: Math.floor(progress * PROGRESS_STEPS) / PROGRESS_STEPS,
+    ready: planting.status === 'ready',
+  };
+}
 
 export function GameCanvas({ debug = false }: { debug?: boolean }) {
   const greenhouse = useGame((s) => s.game.greenhouses[0]);
@@ -43,11 +62,14 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
   const onTapWorld = useCallback(
     (world: Point) => {
       const plots = greenhouse?.plots ?? [];
-      const planted = plots.map((p) => p.planting !== null);
-      const index = plotIndexAt(layout, world, planted);
+      const heights = plots.map((p) => {
+        const look = plantLook(p.planting, crops);
+        return look ? plantHeight(look) : 0;
+      });
+      const index = plotIndexAt(layout, world, heights);
       selectPlot(index === null ? null : (plots[index]?.id ?? null));
     },
-    [layout, greenhouse, selectPlot],
+    [layout, greenhouse, crops, selectPlot],
   );
   const { setContainer, handlers } = useCamera(hostRef, layout, onTapWorld);
 
@@ -129,20 +151,16 @@ function Plots({
     .sort((a, b) => depth(a.tile) - depth(b.tile));
 
   return plots.map(({ plot, tile }) => {
-    const { planting } = plot;
-    const progress = planting
-      ? Math.floor(
-          growthProgress(planting, crops[planting.cropId]) * PROGRESS_STEPS,
-        ) / PROGRESS_STEPS
-      : 0;
+    const look = plantLook(plot.planting, crops);
+    // Primitive props keep PlotView's memo effective.
     return (
       <PlotView
         key={plot.id}
         tile={tile}
         selected={plot.id === selectedPlotId}
-        cropId={planting?.cropId ?? null}
-        progress={progress}
-        ready={planting?.status === 'ready'}
+        cropId={look?.cropId ?? null}
+        progress={look?.progress ?? 0}
+        ready={look?.ready ?? false}
       />
     );
   });

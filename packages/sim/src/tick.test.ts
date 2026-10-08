@@ -153,9 +153,21 @@ describe('advance', () => {
     });
   });
 
-  it('does nothing if the clock went backwards', () => {
+  it('restarts from now if the clock went backwards, instead of freezing', () => {
     const { clock, state } = setup();
-    clock.set(-60_000);
-    expect(advance(state, clock, defaultContent)).toBe(state);
+    clock.set(10 * MS_PER_TICK);
+    const ahead = advance(state, clock, defaultContent);
+    expect(ahead.clock).toEqual({ gameHour: 10, lastTickAt: 10 * MS_PER_TICK });
+
+    // The device clock is set back an hour: no ticks, no freeze.
+    clock.set(10 * MS_PER_TICK - 3_600_000);
+    const rebased = advance(ahead, clock, defaultContent);
+    expect(rebased.clock).toEqual({
+      gameHour: 10,
+      lastTickAt: clock.now(),
+    });
+
+    clock.advance(MS_PER_TICK);
+    expect(advance(rebased, clock, defaultContent).clock.gameHour).toBe(11);
   });
 });

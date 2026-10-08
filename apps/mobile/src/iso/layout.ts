@@ -9,11 +9,11 @@ import {
 } from './projection';
 
 /** Plots per row inside a greenhouse. */
-export const PLOT_COLUMNS = 2;
+const PLOT_COLUMNS = 2;
 /** Height of the greenhouse walls in world pixels. */
 export const WALL_HEIGHT = 110;
-/** Tappable area above a plot's centre, where its plant is drawn. */
-export const PLANT_HIT = { halfWidth: 34, height: 96 };
+/** Half the width of a plant's tap area above its tile. */
+export const PLANT_HIT_HALF_WIDTH = 30;
 
 const MIN_GROUND_SIZE = 12;
 
@@ -53,32 +53,36 @@ export function createLayout(plotCount: number): SceneLayout {
 }
 
 /**
- * The plot under a world point: first the plants (front to back, since
- * plants overlap the tiles behind them), then the plot tiles themselves.
- * `planted[k]` says whether plot k has a plant to tap.
+ * The plot under a world point. A plot's own tile always wins, so every plot
+ * stays reachable however tall its neighbours grow. Above the tiles, the
+ * plants themselves are tappable, front to back. `plantHeights[k]` is how far
+ * plot k's plant reaches above its tile centre (0 for an empty plot).
  */
 export function plotIndexAt(
   layout: SceneLayout,
   p: Point,
-  planted: readonly boolean[],
+  plantHeights: readonly number[],
 ): number | null {
+  const tile = tileAt(p);
+  const onTile = layout.plots.findIndex(
+    (t) => t.i === tile.i && t.j === tile.j,
+  );
+  if (onTile !== -1) return onTile;
+
   const frontToBack = layout.plots
-    .map((tile, index) => ({ tile, index }))
-    .filter(({ index }) => planted[index])
+    .map((tile, index) => ({ tile, index, height: plantHeights[index] ?? 0 }))
+    .filter(({ height }) => height > 0)
     .sort((a, b) => depth(b.tile) - depth(a.tile));
 
-  for (const { tile, index } of frontToBack) {
+  for (const { tile, index, height } of frontToBack) {
     const c = tileCenter(tile);
-    const insideColumn =
-      Math.abs(p.x - c.x) <= PLANT_HIT.halfWidth &&
+    const insidePlant =
+      Math.abs(p.x - c.x) <= PLANT_HIT_HALF_WIDTH &&
       p.y <= c.y &&
-      p.y >= c.y - PLANT_HIT.height;
-    if (insideColumn) return index;
+      p.y >= c.y - height;
+    if (insidePlant) return index;
   }
-
-  const tile = tileAt(p);
-  const index = layout.plots.findIndex((t) => t.i === tile.i && t.j === tile.j);
-  return index === -1 ? null : index;
+  return null;
 }
 
 /** World bounding box of the ground diamond. */

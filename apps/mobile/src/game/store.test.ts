@@ -1,6 +1,6 @@
 import { defaultContent } from '@voltiris/content';
 import { describe, expect, it, vi } from 'vitest';
-import { startGameLoop } from './store';
+import { createGameStore, startGameLoop } from './store';
 import { createTestStore, firstGreenhouseOf } from './test-utils';
 
 const MS_PER_TICK = defaultContent.time.realMsPerTick;
@@ -35,6 +35,29 @@ describe('game store', () => {
       cropId: 'tomato',
       plantedAtHour: 5,
     });
+  });
+
+  it('times a command and its catch-up with one clock reading', () => {
+    // A clock that has moved past a tick boundary on every read.
+    let reads = 0;
+    const clock = {
+      now: () => (reads++ === 0 ? MS_PER_TICK - 1 : MS_PER_TICK),
+    };
+    const { store: base } = createTestStore();
+    const store = createGameStore({
+      content: defaultContent,
+      clock,
+      newId: () => 'cmd',
+      game: base.getState().game,
+    });
+    const greenhouse = firstGreenhouseOf(store);
+    store
+      .getState()
+      .plantCrop(greenhouse.id, greenhouse.plots[0]?.id ?? '', 'tomato');
+
+    expect(reads).toBe(1);
+    expect(store.getState().game.clock.gameHour).toBe(0);
+    expect(firstGreenhouseOf(store).plots[0]?.planting?.plantedAtHour).toBe(0);
   });
 
   it('keeps the error of a rejected command until the next selection', () => {

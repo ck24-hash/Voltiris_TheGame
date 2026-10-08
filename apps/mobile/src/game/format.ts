@@ -2,7 +2,7 @@ import type { ClimateVariable, Season } from '@voltiris/content';
 import type { Calendar } from '@voltiris/sim';
 import { GAUGES } from './gauges';
 
-export const CURRENCY = { singular: 'Volticoin', plural: 'Volticoins' };
+const CURRENCY = { singular: 'Volticoin', plural: 'Volticoins' };
 
 const wholeNumber = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,

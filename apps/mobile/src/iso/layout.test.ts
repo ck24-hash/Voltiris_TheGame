@@ -3,10 +3,16 @@ import {
   createLayout,
   greenhouseBounds,
   groundBounds,
-  PLANT_HIT,
+  PLANT_HIT_HALF_WIDTH,
   plotIndexAt,
 } from './layout';
-import { depth, tileCenter, tileCorners } from './projection';
+import {
+  gridToWorld,
+  tileAt,
+  tileCenter,
+  type GridPoint,
+  type Point,
+} from './projection';
 
 describe('createLayout', () => {
   const layout = createLayout(4);
@@ -40,51 +46,74 @@ describe('createLayout', () => {
   });
 });
 
+/** Points spread over a tile's diamond, just inside its edges. */
+function pointsOnTile(tile: GridPoint): Point[] {
+  const points: Point[] = [];
+  for (let a = 0.03; a < 1; a += 0.0625) {
+    for (let b = 0.03; b < 1; b += 0.0625) {
+      points.push(gridToWorld(tile.i + a, tile.j + b));
+    }
+  }
+  return points;
+}
+
 describe('plotIndexAt', () => {
+  // Plots: 0 back, 1 right, 2 left, 3 front (directly below 0 on screen).
   const layout = createLayout(4);
-  const none = [false, false, false, false];
-  const all = [true, true, true, true];
+  const [back, right, , front] = layout.plots as [
+    GridPoint,
+    GridPoint,
+    GridPoint,
+    GridPoint,
+  ];
+  const tall = 200;
 
-  it('finds each plot from its tile', () => {
+  it('selects a plot from anywhere on its tile, however tall its neighbours grow', () => {
+    // Plot 0 is empty and boxed in by tall plants on every front side.
+    const heights = [0, tall, tall, tall];
+    for (const p of pointsOnTile(back)) {
+      expect(plotIndexAt(layout, p, heights)).toBe(0);
+    }
     layout.plots.forEach((tile, index) => {
-      expect(plotIndexAt(layout, tileCenter(tile), none)).toBe(index);
-      const [top] = tileCorners(tile);
-      expect(plotIndexAt(layout, { x: top.x, y: top.y + 3 }, none)).toBe(index);
+      expect(
+        plotIndexAt(layout, tileCenter(tile), [tall, tall, tall, tall]),
+      ).toBe(index);
     });
   });
 
-  it('finds a plot from a tap on its plant', () => {
-    layout.plots.forEach((tile, index) => {
-      const c = tileCenter(tile);
-      const tip = { x: c.x, y: c.y - PLANT_HIT.height + 4 };
-      expect(plotIndexAt(layout, tip, all)).toBe(index);
-      expect(plotIndexAt(layout, tip, none)).not.toBe(index);
-    });
+  it('selects a plant from its leaves above the tiles', () => {
+    const c = tileCenter(back);
+    const aboveBackTile = { x: c.x, y: c.y - 60 };
+    expect(tileAt(aboveBackTile)).not.toEqual(back);
+    expect(plotIndexAt(layout, aboveBackTile, [100, 0, 0, 0])).toBe(0);
+
+    const r = tileCenter(right);
+    expect(plotIndexAt(layout, { x: r.x, y: r.y - 50 }, [0, 100, 0, 0])).toBe(
+      1,
+    );
   });
 
-  it('prefers the plant in front where plants overlap', () => {
-    const front = layout.plots.reduce((a, b) => (depth(b) > depth(a) ? b : a));
-    const behind = { i: front.i - 1, j: front.j - 1 };
-    expect(layout.plots).toContainEqual(behind);
-    const c = tileCenter(front);
-    // Inside both plant columns: the front one rises over the one behind.
-    const p = { x: c.x, y: c.y - 80 };
-    expect(plotIndexAt(layout, p, all)).toBe(layout.plots.indexOf(front));
+  it('only reaches as high and wide as the drawn plant', () => {
+    const c = tileCenter(back);
+    const above = { x: c.x, y: c.y - 60 };
+    expect(plotIndexAt(layout, above, [20, 0, 0, 0])).toBeNull();
+    const beside = { x: c.x + PLANT_HIT_HALF_WIDTH + 1, y: c.y - 60 };
+    expect(plotIndexAt(layout, beside, [100, 0, 0, 0])).toBeNull();
   });
 
-  it('lets taps reach the tile behind an empty plot', () => {
-    const [first] = layout.plots;
-    if (!first) throw new Error('no plots');
-    const [, right] = tileCorners(first);
-    const nearRightCorner = { x: right.x - 6, y: right.y };
-    const firstIndex = 0;
-    expect(
-      plotIndexAt(layout, nearRightCorner, [true, false, true, false]),
-    ).toBe(firstIndex);
+  it('prefers the plant in front where plants overlap above the tiles', () => {
+    const c = tileCenter(back);
+    expect(tileCenter(front).x).toBe(c.x);
+    // Above every tile, inside both the back and the front plant.
+    const p = { x: c.x, y: c.y - 100 };
+    expect(plotIndexAt(layout, p, [tall, 0, 0, tall])).toBe(3);
+    expect(plotIndexAt(layout, p, [tall, 0, 0, 0])).toBe(0);
   });
 
   it('returns null away from the plots', () => {
-    expect(plotIndexAt(layout, tileCenter({ i: 0, j: 0 }), all)).toBeNull();
+    expect(
+      plotIndexAt(layout, tileCenter({ i: 0, j: 0 }), [tall, tall, tall, tall]),
+    ).toBeNull();
   });
 });
 

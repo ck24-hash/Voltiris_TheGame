@@ -18,7 +18,9 @@ export function tick(state: GameState, content: GameContent): GameState {
 
 /**
  * Runs every tick that has come due by `clock.now()`. Leftover time below one
- * tick carries over, so ticks never drift.
+ * tick carries over, so ticks never drift. If the clock went backwards (the
+ * device time was changed), time restarts from now instead of freezing until
+ * the clock catches up.
  */
 export function advance(
   state: GameState,
@@ -26,7 +28,11 @@ export function advance(
   content: GameContent,
 ): GameState {
   const { realMsPerTick } = content.time;
-  const due = ticksDue(state.clock.lastTickAt, clock.now(), realMsPerTick);
+  const now = clock.now();
+  if (now < state.clock.lastTickAt) {
+    return { ...state, clock: { ...state.clock, lastTickAt: now } };
+  }
+  const due = ticksDue(state.clock.lastTickAt, now, realMsPerTick);
   if (due === 0) return state;
 
   let next = state;

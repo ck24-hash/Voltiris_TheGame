@@ -6,13 +6,13 @@ import {
   useRef,
   type PointerEvent,
   type RefObject,
-  type WheelEvent,
 } from 'react';
 import {
   clampCamera,
   containerTransform,
   fitCamera,
   panCamera,
+  pinchCamera,
   screenToWorld,
   zoomCameraAt,
   type Camera,
@@ -107,18 +107,14 @@ export function useCamera(
     trackerRef.current = createGestureTracker({
       pan: (dx, dy) =>
         update((cam) => panCamera(cam, dx, dy, limitsRef.current)),
-      pinch: (center, scale, dx, dy) =>
+      pinch: (from, to, scale) =>
         update((cam) =>
-          panCamera(
-            zoomCameraAt(
-              cam,
-              viewportRef.current,
-              center,
-              scale,
-              limitsRef.current,
-            ),
-            dx,
-            dy,
+          pinchCamera(
+            cam,
+            viewportRef.current,
+            from,
+            to,
+            scale,
             limitsRef.current,
           ),
         ),
@@ -133,6 +129,30 @@ export function useCamera(
       trackerRef.current = null;
     };
   }, [update]);
+
+  // Native, non-passive wheel listener: React's onWheel is passive, so it
+  // cannot stop a trackpad pinch (ctrl+wheel) from also zooming the page.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const onWheel = (e: globalThis.WheelEvent) => {
+      e.preventDefault();
+      const rect = host.getBoundingClientRect();
+      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED);
+      update((cam) =>
+        zoomCameraAt(
+          cam,
+          viewportRef.current,
+          point,
+          factor,
+          limitsRef.current,
+        ),
+      );
+    };
+    host.addEventListener('wheel', onWheel, { passive: false });
+    return () => host.removeEventListener('wheel', onWheel);
+  }, [hostRef, update]);
 
   const setContainer = useCallback(
     (container: Container | null) => {
@@ -163,22 +183,8 @@ export function useCamera(
         trackerRef.current?.up(sample(e)),
       onPointerCancel: (e: PointerEvent<HTMLDivElement>) =>
         trackerRef.current?.cancel(e.pointerId),
-      onWheel: (e: WheelEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-        const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED);
-        update((cam) =>
-          zoomCameraAt(
-            cam,
-            viewportRef.current,
-            point,
-            factor,
-            limitsRef.current,
-          ),
-        );
-      },
     };
-  }, [update]);
+  }, []);
 
   return { setContainer, handlers };
 }

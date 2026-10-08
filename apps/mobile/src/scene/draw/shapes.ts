@@ -13,19 +13,6 @@ export function lerp(a: Point, b: Point, t: number): Point {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
-/** Filled polygon with a toon outline. */
-export function toonPoly(
-  g: Graphics,
-  points: readonly Point[],
-  fill: number,
-  outline: number,
-  options: { alpha?: number; width?: number } = {},
-): void {
-  g.poly(flat(points))
-    .fill({ color: fill, alpha: options.alpha ?? 1 })
-    .stroke({ color: outline, width: options.width ?? 2, join: 'round' });
-}
-
 export function toonCircle(
   g: Graphics,
   x: number,

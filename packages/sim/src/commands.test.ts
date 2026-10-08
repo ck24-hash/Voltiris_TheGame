@@ -1,6 +1,6 @@
 import { defaultContent, type CropId } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
-import { applyCommand, type PlantCropCommand } from './commands';
+import { applyCommand, type Command, type PlantCropCommand } from './commands';
 import type { GameState } from './state';
 import {
   deepFreeze,
@@ -79,6 +79,16 @@ describe('PlantCrop', () => {
     expect(result).toMatchObject({
       ok: false,
       error: { code: 'PLOT_OCCUPIED' },
+    });
+  });
+
+  it('rejects a command of unknown type instead of crashing', () => {
+    const state = newTestGame();
+    const bogus = { type: 'Teleport', id: 'x', issuedAt: 0 } as unknown;
+    const result = applyCommand(state, bogus as Command, defaultContent);
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'UNKNOWN_COMMAND' },
     });
   });
 

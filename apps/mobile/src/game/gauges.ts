@@ -64,7 +64,7 @@ export const GAUGES: Record<ClimateVariable, GaugeDef> = {
 };
 
 /** idle: nothing growing. good: optimal for every crop. warn: slows growth. bad: stops growth. */
-export type GaugeStatus = 'idle' | 'good' | 'warn' | 'bad';
+type GaugeStatus = 'idle' | 'good' | 'warn' | 'bad';
 
 export interface GaugeReading {
   readonly status: GaugeStatus;

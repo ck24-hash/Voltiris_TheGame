@@ -46,7 +46,11 @@ describe('gesture tracker', () => {
     tracker.down(at(1, 100, 200));
     tracker.down(at(2, 200, 200));
     tracker.move(at(2, 300, 200));
-    expect(handlers.pinch).toHaveBeenCalledWith({ x: 200, y: 200 }, 2, 50, 0);
+    expect(handlers.pinch).toHaveBeenCalledWith(
+      { x: 150, y: 200 },
+      { x: 200, y: 200 },
+      2,
+    );
     expect(handlers.pan).not.toHaveBeenCalled();
   });
 

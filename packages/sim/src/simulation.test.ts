@@ -16,6 +16,17 @@ import {
 
 const { crops } = defaultContent;
 
+/** Ticks needed at a constant growth rate, summed hour by hour like tick(). */
+function ticksAtRate(rate: number, requiredHours: number): number {
+  let grown = 0;
+  let ticks = 0;
+  while (grown < requiredHours) {
+    grown += rate;
+    ticks += 1;
+  }
+  return ticks;
+}
+
 /** Ticks until the crop in plot 0 is ready, or Infinity within `limit`. */
 function ticksToReady(state: GameState, limit = 5000): number {
   let next = state;
@@ -50,9 +61,9 @@ describe('a tomato in a cold greenhouse (14 °C)', () => {
 
   it('grows more slowly', () => {
     expect(plantingAt(runTicks(start, 720))?.status).toBe('growing');
-    const expectedTicks = Math.ceil(
-      requiredGrowthHours(crops.tomato) / growthRate(cold, crops.tomato),
-    );
+    const rate = growthRate(cold, crops.tomato);
+    expect(rate).toBeLessThan(1);
+    const expectedTicks = ticksAtRate(rate, requiredGrowthHours(crops.tomato));
     expect(expectedTicks).toBeGreaterThan(720);
     expect(ticksToReady(start)).toBe(expectedTicks);
   });

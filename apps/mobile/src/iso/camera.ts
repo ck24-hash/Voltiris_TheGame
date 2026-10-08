@@ -94,6 +94,22 @@ export function zoomCameraAt(
   );
 }
 
+/**
+ * Two-finger gesture: zoom by `scale` around the old finger midpoint `from`,
+ * then move with the fingers to `to`, so the world stays under the fingers.
+ */
+export function pinchCamera(
+  cam: Camera,
+  vp: Viewport,
+  from: Point,
+  to: Point,
+  scale: number,
+  limits: CameraLimits,
+): Camera {
+  const zoomed = zoomCameraAt(cam, vp, from, scale, limits);
+  return panCamera(zoomed, to.x - from.x, to.y - from.y, limits);
+}
+
 /** Centres on `rect` with the largest zoom that fits it, minus padding. */
 export function fitCamera(
   rect: Rect,

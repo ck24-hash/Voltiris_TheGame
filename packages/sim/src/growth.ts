@@ -76,7 +76,11 @@ export function growthProgress(planting: Planting, crop: CropDef): number {
   return Math.min(1, planting.growthHours / requiredGrowthHours(crop));
 }
 
-/** Ticks until ready if the climate stays as it is; Infinity if growth has stopped. */
+/**
+ * Estimated ticks until ready if the climate stays as it is; Infinity if
+ * growth has stopped. For display: it can be one tick off, because the sim
+ * sums growth tick by tick in floating point.
+ */
 export function hoursToReady(
   planting: GrowingPlanting,
   climate: Climate,

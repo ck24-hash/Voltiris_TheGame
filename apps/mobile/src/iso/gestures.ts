@@ -9,8 +9,8 @@ export interface PointerSample extends Point {
 export interface GestureHandlers {
   /** One finger (or mouse) dragged by (dx, dy). */
   pan(dx: number, dy: number): void;
-  /** Two fingers: zoom by `scale` around `center`, and move by (dx, dy). */
-  pinch(center: Point, scale: number, dx: number, dy: number): void;
+  /** Two fingers: their midpoint moved from `from` to `to` while their spread changed by `scale`. */
+  pinch(from: Point, to: Point, scale: number): void;
   /** A short press that barely moved. */
   tap(point: Point): void;
 }
@@ -71,9 +71,7 @@ export function createGestureTracker(
 
       const startDistance = distance(...before);
       const scale = startDistance > 0 ? distance(...after) / startDistance : 1;
-      const from = midpoint(...before);
-      const to = midpoint(...after);
-      handlers.pinch(to, scale, to.x - from.x, to.y - from.y);
+      handlers.pinch(midpoint(...before), midpoint(...after), scale);
     },
 
     up(p) {
