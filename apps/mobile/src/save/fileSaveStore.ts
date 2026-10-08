@@ -1,14 +1,18 @@
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { BACKUP_COUNT, type SaveStore } from './SaveStore';
 
-/** The file operations the store needs: Capacitor's Filesystem on a phone, a fake in tests. */
+/**
+ * The file operations the store needs: Capacitor's Filesystem on a phone, a
+ * fake in tests. The store only touches files `list` returns (asking the
+ * phone about a missing file logs an error), and never renames onto one.
+ */
 export interface SaveFiles {
-  /** The file's text, or null if there is no such file. */
-  read(name: string): Promise<string | null>;
+  /** Names of the save files there are. */
+  list(): Promise<string[]>;
+  read(name: string): Promise<string>;
   write(name: string, text: string): Promise<void>;
-  /** Renames a file, replacing `to`; does nothing if `from` is missing. */
+  /** Renames a file; `to` must not exist (iOS will not replace it). */
   move(from: string, to: string): Promise<void>;
-  /** Deletes a file; does nothing if it is missing. */
   remove(name: string): Promise<void>;
 }
 
@@ -23,11 +27,14 @@ const slot = (k: number) => `save-${k}.json`;
  * crash at any point still leaves a complete save behind.
  */
 export function createFileSaveStore(files: SaveFiles): SaveStore {
+  const present = async () => new Set(await files.list());
+
   /** Shifts the backups down and makes the next save the current one. */
-  const shiftIn = async () => {
-    await files.remove(slot(BACKUP_COUNT));
+  const shiftIn = async (names: ReadonlySet<string>) => {
+    if (names.has(slot(BACKUP_COUNT))) await files.remove(slot(BACKUP_COUNT));
+    // From the oldest down, so each slot is empty before a file moves in.
     for (let k = BACKUP_COUNT - 1; k >= 0; k--) {
-      await files.move(slot(k), slot(k + 1));
+      if (names.has(slot(k))) await files.move(slot(k), slot(k + 1));
     }
     await files.move(NEXT, slot(0));
   };
@@ -35,19 +42,21 @@ export function createFileSaveStore(files: SaveFiles): SaveStore {
   return {
     async write(file) {
       // Finish a save the app died in the middle of, so it is kept.
-      if ((await files.read(NEXT)) !== null) await shiftIn();
+      const before = await present();
+      if (before.has(NEXT)) await shiftIn(before);
       await files.write(NEXT, JSON.stringify(file));
-      await shiftIn();
+      await shiftIn(await present());
     },
 
     async readAll() {
       // A leftover next save means the app died mid-way: it is the newest.
-      const names = [
+      const names = await present();
+      const order = [
         NEXT,
         ...Array.from({ length: 1 + BACKUP_COUNT }, (_, k) => slot(k)),
-      ];
-      const texts = await Promise.all(names.map((name) => files.read(name)));
-      return texts.flatMap((text) => (text === null ? [] : [parseJson(text)]));
+      ].filter((name) => names.has(name));
+      const texts = await Promise.all(order.map((name) => files.read(name)));
+      return texts.map(parseJson);
     },
   };
 }
@@ -65,23 +74,22 @@ function parseJson(text: string): unknown {
 export function capacitorSaveFiles(folder = 'saves'): SaveFiles {
   const directory = Directory.Library;
   const path = (name: string) => `${folder}/${name}`;
-  const exists = async (name: string) => {
-    try {
-      await Filesystem.stat({ path: path(name), directory });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  const remove = async (name: string) => {
-    if (await exists(name)) {
-      await Filesystem.deleteFile({ path: path(name), directory });
-    }
-  };
+  // Listing a missing folder is an error too: look for it until it exists.
+  let folderExists = false;
 
   return {
+    list: async () => {
+      if (!folderExists) {
+        const { files } = await Filesystem.readdir({ path: '', directory });
+        folderExists = files.some(
+          (f) => f.name === folder && f.type === 'directory',
+        );
+        if (!folderExists) return [];
+      }
+      const { files } = await Filesystem.readdir({ path: folder, directory });
+      return files.map((f) => f.name);
+    },
     read: async (name) => {
-      if (!(await exists(name))) return null;
       const { data } = await Filesystem.readFile({
         path: path(name),
         directory,
@@ -99,9 +107,6 @@ export function capacitorSaveFiles(folder = 'saves'): SaveFiles {
       });
     },
     move: async (from, to) => {
-      if (!(await exists(from))) return;
-      // iOS will not rename onto an existing file.
-      await remove(to);
       await Filesystem.rename({
         from: path(from),
         to: path(to),
@@ -109,6 +114,8 @@ export function capacitorSaveFiles(folder = 'saves'): SaveFiles {
         toDirectory: directory,
       });
     },
-    remove,
+    remove: async (name) => {
+      await Filesystem.deleteFile({ path: path(name), directory });
+    },
   };
 }

@@ -92,9 +92,14 @@ export function useCamera(
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const onResize = () => {
+    const fit = (always: boolean) => {
       const viewport = { width: host.clientWidth, height: host.clientHeight };
       if (viewport.width === 0 || viewport.height === 0) return;
+      const previous = viewportRef.current;
+      const resized =
+        viewport.width !== previous.width ||
+        viewport.height !== previous.height;
+      if (!always && !resized) return;
       const limits = cameraLimits(layout, viewport);
       viewportRef.current = viewport;
       limitsRef.current = limits;
@@ -104,8 +109,10 @@ export function useCamera(
       apply();
       eventsRef.current.onMove();
     };
-    onResize();
-    const observer = new ResizeObserver(onResize);
+    fit(true);
+    // The observer also reports the starting size, late on a slow device:
+    // that is no move, and must not close a bubble the player just opened.
+    const observer = new ResizeObserver(() => fit(false));
     observer.observe(host);
     return () => observer.disconnect();
   }, [hostRef, layout, apply]);

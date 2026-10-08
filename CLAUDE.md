@@ -31,7 +31,7 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 
 ## CI and iOS (no Mac needed)
 
-- `.github/workflows/ci.yml` (every push, Ubuntu): checks, unit tests, e2e tests, Android debug build.
+- `.github/workflows/ci.yml` (every push, Ubuntu): checks, unit tests, e2e tests, Android debug build. Headless WebKit on Linux does not draw the WebGL map (its screenshots show only the HUD), so there it tests the UI and saves; the map's drawing is covered by Chromium and the iOS job.
 - `.github/workflows/ios.yml` (pushes to main, macOS 26 / Xcode 26): builds the iOS app for the Simulator and runs `apps/mobile/scripts/ios-smoke.sh` (launch, close for 30 s at 240x, relaunch from the save). Screenshots, console logs and save files are uploaded as the `ios-smoke` artifact: `gh run download <run> -n ios-smoke`.
 - iOS minimum is 16.4 (Xcode project); Vite builds for `chrome107` and `safari16.4`.
 
@@ -71,6 +71,7 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - Tapping a plot opens a bubble at the plot (seeds, growth, what holds it back); panning closes it.
 - Climate shows as badges down the left edge; the ring colour is the status, with a note when off.
 - The player's lot sits beside a road on endless land. The camera stays over the lot (2 tiles inside the fence) and zooms out until the whole lot fits. "For sale" signs mark future expansions. The lot and building spots live in `iso/layout.ts` until Phase 9 puts land into GameState.
+- "Reduce Motion" turns off the pop-in animations (the e2e tests run with it on).
 - Full screen: system bars and the iOS home indicator hidden (Capacitor SystemBars); edge swipes are deferred (`GameViewController` on iOS, transient bars on Android) so panning near an edge stays in the game.
 - Saves: every 30 s, after every command and when the app is hidden; current save plus 2 backups. A damaged save or one from a newer version is never replaced without asking.
 - "Welcome back" appears after launch or a return from the background when 20+ ticks (5 real minutes) were caught up; stalls while playing never trigger it.

@@ -9,35 +9,43 @@ import { toSaveFile } from './saveFile';
 import { createMemorySaveStore, type SaveStore } from './SaveStore';
 
 /**
- * Files in memory. With `dieAfter`, the "app" is killed after that many
- * file operations: the next one throws and nothing more is written.
+ * Files in memory, as strict as iOS: reading, moving or deleting a missing
+ * file fails, and so does renaming onto an existing one. With `dieAfter`, the
+ * "app" is killed after that many changes: the next one throws and nothing
+ * more is written.
  */
 function memoryFiles(disk = new Map<string, string>(), dieAfter = Infinity) {
   let operations = 0;
   const step = () => {
     if (operations++ >= dieAfter) throw new Error('app killed');
   };
+  const existing = (name: string) => {
+    const text = disk.get(name);
+    if (text === undefined) throw new Error(`${name} does not exist`);
+    return text;
+  };
   const files: SaveFiles = {
-    read: (name) => Promise.resolve(disk.get(name) ?? null),
+    list: () => Promise.resolve([...disk.keys()]),
+    read: (name) => Promise.resolve().then(() => existing(name)),
     write: (name, text) => {
       step();
       disk.set(name, text);
       return Promise.resolve();
     },
-    move: (from, to) => {
-      step();
-      const text = disk.get(from);
-      if (text !== undefined) {
+    move: (from, to) =>
+      Promise.resolve().then(() => {
+        step();
+        const text = existing(from);
+        if (disk.has(to)) throw new Error(`${to} already exists`);
         disk.set(to, text);
         disk.delete(from);
-      }
-      return Promise.resolve();
-    },
-    remove: (name) => {
-      step();
-      disk.delete(name);
-      return Promise.resolve();
-    },
+      }),
+    remove: (name) =>
+      Promise.resolve().then(() => {
+        step();
+        existing(name);
+        disk.delete(name);
+      }),
   };
   return files;
 }
@@ -100,7 +108,8 @@ describe('file save store', () => {
     return createFileSaveStore(memoryFiles(disk));
   }
 
-  it.each([0, 1, 2, 3, 4])(
+  // Saving next to two older saves: write, move, move, move.
+  it.each([0, 1, 2, 3])(
     'still loads a complete save if the app dies after %i steps of saving',
     async (steps) => {
       const store = await killedDuringThirdSave(steps);

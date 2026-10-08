@@ -84,3 +84,13 @@ h3 {
   margin: 0;
   font-weight: 700;
 }
+
+/* "Reduce Motion" in the phone's settings: windows and bubbles just appear. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

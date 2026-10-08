@@ -28,6 +28,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
+    // Pop-in animations crawl while the map draws in software; tests wait
+    // for buttons to stop moving before tapping them.
+    contextOptions: { reducedMotion: 'reduce' },
   },
   webServer: {
     command: `npm run build && npx vite preview --port ${PORT} --strictPort`,
