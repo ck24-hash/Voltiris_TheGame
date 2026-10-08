@@ -37,6 +37,26 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - Content is always passed in (`defaultContent` from @voltiris/content), so tests and balance scripts can use their own
 - Sim tests share helpers in `packages/sim/src/test-utils.ts`
 
+## App structure (apps/mobile/src)
+
+- `game/` – Zustand store (`createGameStore`), game loop, formatting, gauge readings. The UI only reads state and calls store actions that send sim commands.
+- `iso/` – pure isometric math: projection, camera, scene layout, gesture tracking. Unit-tested.
+- `scene/` – Pixi scene via @pixi/react; `draw/` holds the placeholder toon shapes. Camera moves are written straight to the Pixi container, never through React state.
+- `ui/` – DOM overlay: HUD, climate gauges, plant panel, bottom nav.
+- App tests mock `scene/GameCanvas` (jsdom has no WebGL); check rendering on the emulator.
+
+## Dev flags
+
+- Browser: `?speed=240&debug`. Emulator build: `VITE_TIME_SPEED=240 VITE_DEBUG=1 npm run build -w @voltiris/mobile`, then sync.
+- `speed` multiplies game time; `debug` shows an FPS meter (also logged as `[fps]`, visible in `adb logcat`) and previews the equipment shapes.
+
+## Design decisions
+
+- Currency: Volticoin (coin icon with a lightning bolt).
+- Tone: playful toon look, but real units (°C, %, ppm, PAR, EC) with plain-language status ("Too cold").
+- Climate is static greenhouse state until its drivers arrive: water/nutrient use (Phase 5), equipment (Phase 6), weather (Phase 10).
+- Gauges judge each value against the growing crop that is worst off.
+
 ## Notes
 
 - Workspaces import each other's TypeScript source directly (package `exports` point to `src/index.ts`); there is no per-package build.

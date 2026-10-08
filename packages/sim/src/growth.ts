@@ -71,6 +71,23 @@ export function requiredGrowthHours(crop: CropDef): number {
   return crop.growthDays * HOURS_PER_DAY;
 }
 
+/** Growth progress from 0 to 1. */
+export function growthProgress(planting: Planting, crop: CropDef): number {
+  return Math.min(1, planting.growthHours / requiredGrowthHours(crop));
+}
+
+/** Ticks until ready if the climate stays as it is; Infinity if growth has stopped. */
+export function hoursToReady(
+  planting: GrowingPlanting,
+  climate: Climate,
+  crop: CropDef,
+): number {
+  const rate = growthRate(climate, crop);
+  if (rate === 0) return Infinity;
+  const remaining = requiredGrowthHours(crop) - planting.growthHours;
+  return Math.max(0, Math.ceil(remaining / rate));
+}
+
 /** Grows a planting by one tick; `gameHour` is the hour the tick ends on. */
 export function growPlanting(
   planting: GrowingPlanting,

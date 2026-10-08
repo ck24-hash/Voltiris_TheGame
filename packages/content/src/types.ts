@@ -47,9 +47,15 @@ export interface CropDef {
   readonly climate: Readonly<Record<ClimateVariable, ClimateResponse>>;
 }
 
+export const SEASONS = ['spring', 'summer', 'autumn', 'winter'] as const;
+
+export type Season = (typeof SEASONS)[number];
+
 export interface TimeConfig {
   /** Real milliseconds per tick (one in-game hour). */
   readonly realMsPerTick: number;
+  /** In-game days per season; a year is four seasons. */
+  readonly daysPerSeason: number;
 }
 
 export interface StartingGreenhouseConfig {

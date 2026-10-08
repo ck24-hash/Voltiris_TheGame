@@ -9,6 +9,7 @@ import type {
 
 export const TIME: TimeConfig = {
   realMsPerTick: 15_000,
+  daysPerSeason: 15,
 };
 
 export const STARTING_GREENHOUSE: StartingGreenhouseConfig = {

@@ -56,4 +56,8 @@ describe('time', () => {
   it('runs one tick (one in-game hour) every 15 real seconds', () => {
     expect(time.realMsPerTick).toBe(15_000);
   });
+
+  it('has 15 in-game days per season', () => {
+    expect(time.daysPerSeason).toBe(15);
+  });
 });

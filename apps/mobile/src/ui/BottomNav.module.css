@@ -1,0 +1,30 @@
+.nav {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px calc(12px + env(safe-area-inset-right)) 6px
+    calc(12px + env(safe-area-inset-left));
+  background: var(--panel-solid);
+  box-shadow: 0 -2px 8px rgb(0 0 0 / 10%);
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+  height: 40px;
+  justify-content: center;
+  padding: 0 16px;
+  border: none;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.active {
+  background: var(--accent);
+  color: #fff;
+}

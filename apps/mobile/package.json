@@ -16,9 +16,13 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
     "@capacitor/ios": "^8.5.3",
+    "@pixi/react": "^8.0.5",
+    "@voltiris/content": "^0.1.0",
     "@voltiris/sim": "^0.1.0",
+    "pixi.js": "^8.22.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.5.3",

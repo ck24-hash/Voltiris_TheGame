@@ -7,7 +7,9 @@ import { describe, expect, it } from 'vitest';
 import {
   climateFactor,
   cropQuality,
+  growthProgress,
   growthRate,
+  hoursToReady,
   requiredGrowthHours,
   stressRate,
 } from './growth';
@@ -124,6 +126,54 @@ describe('cropQuality', () => {
       expect(qualities[i]).toBeLessThan(qualities[i - 1] ?? Infinity);
       expect(qualities[i]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('growthProgress', () => {
+  it('goes from 0 to 1 and never above', () => {
+    const planting = {
+      status: 'growing',
+      cropId: 'tomato',
+      plantedAtHour: 0,
+      growthHours: 0,
+      stress: 0,
+    } as const;
+    expect(growthProgress(planting, crops.tomato)).toBe(0);
+    expect(
+      growthProgress({ ...planting, growthHours: 360 }, crops.tomato),
+    ).toBe(0.5);
+    expect(
+      growthProgress({ ...planting, growthHours: 900 }, crops.tomato),
+    ).toBe(1);
+  });
+});
+
+describe('hoursToReady', () => {
+  const planting = {
+    status: 'growing',
+    cropId: 'tomato',
+    plantedAtHour: 0,
+    growthHours: 120,
+    stress: 0,
+  } as const;
+
+  it('is the remaining hours in optimal climate', () => {
+    expect(hoursToReady(planting, optimalClimate('tomato'), crops.tomato)).toBe(
+      600,
+    );
+  });
+
+  it('accounts for slower growth in a worse climate', () => {
+    const cold = { ...optimalClimate('tomato'), temperature: 14 };
+    const rate = growthRate(cold, crops.tomato);
+    expect(hoursToReady(planting, cold, crops.tomato)).toBe(
+      Math.ceil(600 / rate),
+    );
+  });
+
+  it('is Infinity when growth has stopped', () => {
+    const frozen = { ...optimalClimate('tomato'), temperature: 10 };
+    expect(hoursToReady(planting, frozen, crops.tomato)).toBe(Infinity);
   });
 });
 
