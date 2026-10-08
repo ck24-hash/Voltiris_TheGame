@@ -121,6 +121,15 @@ describe('time away', () => {
     expect(store.getState().away).toBeNull();
   });
 
+  it('never greets a brand-new game, even if its first ticks come late', () => {
+    const { clock, store } = createTestStore();
+    store.getState().advance();
+    // Loading the map held the game loop up (a long time at dev speed).
+    clock.advance(10 * 60_000);
+    store.getState().advance();
+    expect(store.getState().away).toBeNull();
+  });
+
   it('never summarises a long stall while the player is playing', () => {
     const { clock, store } = createTestStore();
     clock.advance(MS_PER_TICK);

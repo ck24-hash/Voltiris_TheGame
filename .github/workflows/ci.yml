@@ -1,0 +1,68 @@
+name: CI
+
+# Every push: unit tests and checks, the end-to-end tests in WebKit (iPhone)
+# and Chromium (Android), and an Android debug build.
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+      - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: e2e-results
+          path: |
+            apps/mobile/e2e/results
+            apps/mobile/e2e/report
+          retention-days: 14
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: microsoft
+          java-version: '21'
+      - run: npm ci
+      - run: npm run cap:sync -w @voltiris/mobile
+      - name: Build the debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --no-daemon

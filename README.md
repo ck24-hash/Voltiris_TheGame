@@ -34,6 +34,9 @@ Other scripts (run from the repo root):
 | `npm run typecheck` | TypeScript check in every workspace                        |
 | `npm run format`    | Format all files with Prettier                             |
 | `npm run build`     | Production web build to `apps/mobile/dist`                 |
+| `npm run e2e`       | End-to-end tests in WebKit (iPhone) and Chromium (Android) |
+
+The end-to-end tests need Playwright's browsers once: `npx playwright install webkit chromium`.
 
 ## Android
 
@@ -67,7 +70,11 @@ Other scripts (run from the repo root):
 
 ## iOS
 
-The Xcode project lives in `apps/mobile/ios` (Swift Package Manager, no CocoaPods). On a Mac:
+The Xcode project lives in `apps/mobile/ios` (Swift Package Manager, no CocoaPods). It needs iOS 16.4 or later and Xcode 26.
+
+No Mac is needed day to day: on every push to `main`, the **iOS** GitHub Actions workflow builds the app on a macOS machine, plays it in the iPhone Simulator and uploads screenshots, console logs and save files (`gh run download <run id> -n ios-smoke`). The end-to-end tests also run the game in WebKit, Safari's engine.
+
+On a Mac:
 
 ```sh
 npm install

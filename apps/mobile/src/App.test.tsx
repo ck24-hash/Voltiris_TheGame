@@ -202,6 +202,8 @@ describe('welcome back', () => {
         .getState()
         .plantCrop(greenhouse.id, greenhouse.plots[1]?.id ?? '', 'cucumber'),
     );
+    // The player leaves the app for a while.
+    act(() => store.getState().markAway());
     runTicks(24 * 30);
     const window = screen.getByRole('dialog', { name: 'Welcome back!' });
     expect(within(window).getByText('Ready to harvest')).toBeDefined();

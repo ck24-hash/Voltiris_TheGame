@@ -12,6 +12,7 @@
 
 .window {
   --tone: var(--green);
+  --tone-light: var(--green-light);
   --tone-dark: var(--green-dark);
   position: relative;
   display: flex;
@@ -29,16 +30,19 @@
 
 .gold {
   --tone: var(--gold);
+  --tone-light: var(--gold-light);
   --tone-dark: var(--gold-dark);
 }
 
 .blue {
   --tone: var(--blue);
+  --tone-light: var(--blue-light);
   --tone-dark: var(--blue-dark);
 }
 
 .red {
   --tone: var(--red);
+  --tone-light: var(--red-light);
   --tone-dark: var(--red-dark);
 }
 
@@ -50,11 +54,7 @@
   padding: 6px 56px 6px 16px;
   border-bottom: 3px solid var(--tone-dark);
   border-radius: 17px 17px 0 0;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--tone), #fff 20%),
-    var(--tone)
-  );
+  background: linear-gradient(to bottom, var(--tone-light), var(--tone));
   color: #fff;
   text-shadow: var(--text-outline);
 }

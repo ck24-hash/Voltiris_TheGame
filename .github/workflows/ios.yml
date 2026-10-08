@@ -1,0 +1,56 @@
+name: iOS
+
+# Builds the iOS app on a macOS machine and plays it in the iPhone Simulator:
+# no Mac needed locally. macOS minutes are costly, so this runs on pushes to
+# main (and by hand), not on every branch.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    # Capacitor 8 needs Xcode 26.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Build the game (240x time, debug logs)
+        run: VITE_TIME_SPEED=240 VITE_DEBUG=1 npm run build -w @voltiris/mobile
+
+      - name: Copy it into the iOS project
+        working-directory: apps/mobile
+        run: npx cap sync ios
+
+      - name: Build for the iPhone Simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project apps/mobile/ios/App/App.xcodeproj \
+            -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios CODE_SIGNING_ALLOWED=NO \
+            build | tail -n 40
+
+      - name: Play it in the Simulator
+        run: |
+          apps/mobile/scripts/ios-smoke.sh \
+            build/ios/Build/Products/Debug-iphonesimulator/App.app ios-smoke
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: ios-smoke
+          path: ios-smoke
+          retention-days: 14

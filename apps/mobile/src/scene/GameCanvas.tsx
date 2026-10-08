@@ -59,11 +59,8 @@ extend({ Container, Graphics, Text });
 /** Plant drawings change in 5% steps, so plants redraw at most 20 times. */
 const PROGRESS_STEPS = 20;
 const MAX_RESOLUTION = 2;
-/** Screen space the HUD covers, so the first view centres the yard beside it. */
-const HUD_INSETS = { top: 52, right: 0, bottom: 0, left: 124 } as const;
-
 const SIGN_TEXT: TextStyleOptions = {
-  fontFamily: 'Fredoka Variable, system-ui, sans-serif',
+  fontFamily: 'Fredoka, system-ui, sans-serif',
   fontSize: 15,
   fontWeight: '700',
   fill: COLORS.signRed,
@@ -187,12 +184,7 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
     }),
     [store, greenhouse, crops, layout],
   );
-  const { setContainer, handlers } = useCamera(
-    hostRef,
-    layout,
-    events,
-    HUD_INSETS,
-  );
+  const { setContainer, handlers } = useCamera(hostRef, layout, events);
 
   return (
     <div ref={hostRef} className={styles.host} {...handlers}>
@@ -235,6 +227,7 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
               else labelsRef.current.delete(id);
             }}
             type="button"
+            aria-label={BUILDING_INFO[id].title}
             className={styles.label}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => store.getState().openWindow(id)}

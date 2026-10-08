@@ -1,4 +1,6 @@
-import '@fontsource-variable/fredoka/wght.css';
+import { Capacitor } from '@capacitor/core';
+import '@fontsource/fredoka/latin-500.css';
+import '@fontsource/fredoka/latin-700.css';
 import { defaultContent } from '@voltiris/content';
 import { createGame, type GameState } from '@voltiris/sim';
 import { StrictMode, type ReactNode } from 'react';
@@ -14,6 +16,7 @@ import { createGameStore, startGameLoop } from './game/store';
 import './index.css';
 import { startAutosave } from './save/autosave';
 import { exportText, saveFileName } from './save/exportText';
+import { capacitorSaveFiles, createFileSaveStore } from './save/fileSaveStore';
 import { createIndexedDbSaveStore } from './save/indexedDbSaveStore';
 import { loadGame } from './save/loadGame';
 import { LoadFailed } from './ui/LoadFailed';
@@ -27,7 +30,10 @@ const render = (node: ReactNode) =>
 const flags = readDevFlags(window.location.search, import.meta.env);
 const clock = createScaledClock(systemClock, flags.speed);
 const content = defaultContent;
-const saveStore = createIndexedDbSaveStore();
+// On a phone, save to real files: iOS may clear web storage when space runs low.
+const saveStore = Capacitor.isNativePlatform()
+  ? createFileSaveStore(capacitorSaveFiles())
+  : createIndexedDbSaveStore();
 
 const services: AppServices = {
   newGame: () =>
@@ -72,7 +78,7 @@ async function boot() {
   // Ask the browser not to clear our storage when space runs low.
   void navigator.storage?.persist?.().catch(() => false);
   // Pixi draws text with this font, so it must be ready before the map.
-  await document.fonts.load('600 16px "Fredoka Variable"').catch(() => []);
+  await document.fonts.load('700 16px Fredoka').catch(() => []);
 
   const loaded = await loadGame(saveStore, content);
   switch (loaded.kind) {

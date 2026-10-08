@@ -10,13 +10,16 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "cap:sync": "npm run build && cap sync",
-    "android": "npm run cap:sync && cap run android"
+    "android": "npm run cap:sync && cap run android",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",
     "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
     "@capacitor/ios": "^8.5.3",
-    "@fontsource-variable/fredoka": "^5.3.0",
+    "@capacitor/share": "^8.0.3",
+    "@fontsource/fredoka": "^5.3.0",
     "@pixi/react": "^8.0.5",
     "@voltiris/content": "^0.1.0",
     "@voltiris/sim": "^0.1.0",

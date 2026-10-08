@@ -8,7 +8,7 @@ afterEach(cleanup);
 const BROKEN = { format: 'voltiris-save', game: 1 };
 
 function renderScreen(raw: unknown) {
-  const onExport = vi.fn(() => Promise.resolve('copied' as const));
+  const onExport = vi.fn(() => Promise.resolve('shared' as const));
   const onNewGame = vi.fn();
   render(
     <LoadFailed
@@ -34,7 +34,7 @@ describe('LoadFailed', () => {
     const { onExport } = renderScreen(BROKEN);
     await user.click(screen.getByRole('button', { name: 'Export the save' }));
     expect(onExport).toHaveBeenCalledWith(JSON.stringify(BROKEN, null, 2));
-    expect(await screen.findByText('Copied to the clipboard.')).toBeDefined();
+    expect(await screen.findByText('Save shared.')).toBeDefined();
   });
 
   it('only replaces the save after a confirmation', async () => {

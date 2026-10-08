@@ -10,8 +10,6 @@ import {
 import {
   clampCamera,
   containerTransform,
-  fitCamera,
-  fitZoom,
   panCamera,
   pinchCamera,
   screenToWorld,
@@ -19,7 +17,6 @@ import {
   zoomCameraAt,
   type Camera,
   type CameraLimits,
-  type Insets,
   type Viewport,
 } from '../iso/camera';
 import {
@@ -27,15 +24,10 @@ import {
   type GestureTracker,
   type PointerSample,
 } from '../iso/gestures';
-import {
-  clampToLot,
-  yardBounds,
-  lotBounds,
-  type SceneLayout,
-} from '../iso/layout';
+import type { SceneLayout } from '../iso/layout';
 import type { Point } from '../iso/projection';
+import { cameraLimits, firstView } from '../iso/view';
 
-const MAX_ZOOM = 2.5;
 const WHEEL_ZOOM_SPEED = 0.0015;
 
 export type ToScreen = (world: Point) => Point;
@@ -59,7 +51,6 @@ export function useCamera(
   hostRef: RefObject<HTMLDivElement | null>,
   layout: SceneLayout,
   events: CameraEvents,
-  insets: Insets,
 ) {
   const containerRef = useRef<Container | null>(null);
   const cameraRef = useRef<Camera | null>(null);
@@ -104,19 +95,12 @@ export function useCamera(
     const onResize = () => {
       const viewport = { width: host.clientWidth, height: host.clientHeight };
       if (viewport.width === 0 || viewport.height === 0) return;
-      const limits: CameraLimits = {
-        minZoom: Math.min(
-          1,
-          fitZoom(lotBounds(layout), viewport.width, viewport.height),
-        ),
-        maxZoom: MAX_ZOOM,
-        clampCenter: clampToLot(layout),
-      };
+      const limits = cameraLimits(layout, viewport);
       viewportRef.current = viewport;
       limitsRef.current = limits;
       cameraRef.current = cameraRef.current
         ? clampCamera(cameraRef.current, limits)
-        : fitCamera(yardBounds(layout), viewport, limits, 8, insets);
+        : firstView(layout, viewport);
       apply();
       eventsRef.current.onMove();
     };
@@ -124,7 +108,7 @@ export function useCamera(
     const observer = new ResizeObserver(onResize);
     observer.observe(host);
     return () => observer.disconnect();
-  }, [hostRef, layout, insets, apply]);
+  }, [hostRef, layout, apply]);
 
   const trackerRef = useRef<GestureTracker | null>(null);
   useEffect(() => {

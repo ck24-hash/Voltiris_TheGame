@@ -25,8 +25,15 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - `npm run format` / `npm run format:check` – Prettier
 - `npm run dev` – Vite dev server for apps/mobile
 - `npm run build` – production web build to apps/mobile/dist
+- `npm run e2e` – Playwright end-to-end tests of the production build: WebKit as iPhone 16 and iPhone SE, Chromium as Pixel 7 (landscape, full screen). Screenshots land in `apps/mobile/e2e/results`
 - `npm run cap:sync -w @voltiris/mobile` – build and copy web assets into android/ and ios/
 - `npm run android -w @voltiris/mobile` – build, sync and run on an Android emulator/device
+
+## CI and iOS (no Mac needed)
+
+- `.github/workflows/ci.yml` (every push, Ubuntu): checks, unit tests, e2e tests, Android debug build.
+- `.github/workflows/ios.yml` (pushes to main, macOS 26 / Xcode 26): builds the iOS app for the Simulator and runs `apps/mobile/scripts/ios-smoke.sh` (launch, close for 30 s at 240x, relaunch from the save). Screenshots, console logs and save files are uploaded as the `ios-smoke` artifact: `gh run download <run> -n ios-smoke`.
+- iOS minimum is 16.4 (Xcode project); Vite builds for `chrome107` and `safari16.4`.
 
 ## Sim API (packages/sim)
 
@@ -42,11 +49,11 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 ## App structure (apps/mobile/src)
 
 - `game/` – Zustand store (`createGameStore`), game loop (pauses in the background), app lifecycle, services context, formatting, gauge readings. The UI only reads state and calls store actions that send sim commands.
-- `save/` – `SaveStore` interface with an IndexedDB (Dexie) store and a memory store for tests; `loadGame` (current save, then the 2 backups); autosave; the `voltiris-save` JSON file format for export/import.
+- `save/` – `SaveStore` interface: files in the app's Library folder on phones (Capacitor Filesystem; iOS may clear web storage), IndexedDB (Dexie) in browsers, memory for tests. `loadGame` (current save, then the 2 backups); autosave; the `voltiris-save` JSON file format for export (share sheet on phones, download in browsers) and import.
 - `iso/` – pure isometric math: projection, camera, world layout (lot, buildings, road, tap targets), scenery placement, draw order, gesture tracking. Unit-tested.
 - `scene/` – Pixi world via @pixi/react; `draw/` holds the placeholder toon shapes. Camera moves are written straight to the Pixi container (and the DOM name tags over buildings), never through React state.
 - `ui/` – DOM overlay: HUD, climate badges, plot bubble, game windows (buildings, settings, welcome back, load problem), toast. Shared game look: `GameButton`, `GameWindow`, `icons.tsx`, Fredoka font.
-- App tests mock `scene/GameCanvas` (jsdom has no WebGL); check rendering on the emulator, or in headless Chrome driven over the DevTools protocol.
+- App tests mock `scene/GameCanvas` (jsdom has no WebGL); rendering and real taps are covered by the e2e tests (`apps/mobile/e2e`, positions from `iso/view.ts`) and the emulator / iOS Simulator.
 
 ## Dev flags
 
@@ -64,7 +71,7 @@ Full design and phased plan: `Voltiris The Game – Build Plan for Claude Code.m
 - Tapping a plot opens a bubble at the plot (seeds, growth, what holds it back); panning closes it.
 - Climate shows as badges down the left edge; the ring colour is the status, with a note when off.
 - The player's lot sits beside a road on endless land. The camera stays over the lot (2 tiles inside the fence) and zooms out until the whole lot fits. "For sale" signs mark future expansions. The lot and building spots live in `iso/layout.ts` until Phase 9 puts land into GameState.
-- Full screen: system bars hidden (Capacitor SystemBars), an edge swipe shows them for a moment.
+- Full screen: system bars and the iOS home indicator hidden (Capacitor SystemBars); edge swipes are deferred (`GameViewController` on iOS, transient bars on Android) so panning near an edge stays in the game.
 - Saves: every 30 s, after every command and when the app is hidden; current save plus 2 backups. A damaged save or one from a newer version is never replaced without asking.
 - "Welcome back" appears after launch or a return from the background when 20+ ticks (5 real minutes) were caught up; stalls while playing never trigger it.
 

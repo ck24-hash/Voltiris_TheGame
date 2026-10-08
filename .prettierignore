@@ -5,3 +5,5 @@ package-lock.json
 apps/mobile/android
 apps/mobile/ios
 Voltiris The Game – Build Plan for Claude Code.md
+apps/mobile/e2e/results
+apps/mobile/e2e/report

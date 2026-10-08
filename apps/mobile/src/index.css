@@ -1,5 +1,5 @@
 :root {
-  --font: 'Fredoka Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font: Fredoka, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --ink: #2b3a2e;
   --muted: #6d7b70;
   --cream: #fff8e8;
@@ -7,12 +7,16 @@
   --wood: #b07a45;
   --wood-dark: #6b4423;
   --green: #4cb050;
+  --green-light: #79c47c;
   --green-dark: #2e7d32;
   --gold: #ffc93c;
+  --gold-light: #ffd76d;
   --gold-dark: #c98a12;
   --red: #e5533d;
+  --red-light: #ec7e6e;
   --red-dark: #a8321f;
   --blue: #45a6e0;
+  --blue-light: #74bce8;
   --blue-dark: #2471a3;
   --good: #3fbf55;
   --warn: #ffab2e;
@@ -42,6 +46,11 @@ body,
   overflow: hidden;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--font);
   font-weight: 500;
@@ -49,6 +58,7 @@ body {
   color: var(--ink);
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }

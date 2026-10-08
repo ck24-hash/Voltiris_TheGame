@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ExportMethod } from '../game/services';
 import type { LoadError } from '../save/loadGame';
-import { describeLoadError } from '../save/messages';
+import { describeLoadError, EXPORT_MESSAGES } from '../save/messages';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
 import styles from './LoadFailed.module.css';
@@ -27,10 +27,9 @@ export function LoadFailed({
 
   const exportRaw = async () => {
     try {
-      const method = await onExport(JSON.stringify(raw, null, 2));
-      setExported(
-        method === 'copied' ? 'Copied to the clipboard.' : 'File downloaded.',
-      );
+      const message =
+        EXPORT_MESSAGES[await onExport(JSON.stringify(raw, null, 2))];
+      if (message) setExported(`${message}.`);
     } catch {
       setExported('Could not export the save.');
     }

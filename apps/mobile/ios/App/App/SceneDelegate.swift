@@ -8,7 +8,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        window?.rootViewController = GameViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
@@ -20,5 +20,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
+    }
+}
+
+/// The Capacitor web view, set up for a full-screen game: a swipe from a
+/// screen edge first pulls in a small handle instead of leaving the game,
+/// so panning the map near an edge is safe. The status bar and home
+/// indicator are hidden by the SystemBars plugin (capacitor.config.ts).
+class GameViewController: CAPBridgeViewController {
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge {
+        return .all
     }
 }

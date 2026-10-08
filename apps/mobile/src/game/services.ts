@@ -1,8 +1,8 @@
 import type { GameState } from '@voltiris/sim';
 import { createContext, useContext } from 'react';
 
-/** How an exported save reached the player. */
-export type ExportMethod = 'downloaded' | 'copied';
+/** How an exported save reached the player (or that they closed the share sheet). */
+export type ExportMethod = 'downloaded' | 'shared' | 'cancelled';
 
 /** App-level services the UI needs beyond the game store. */
 export interface AppServices {

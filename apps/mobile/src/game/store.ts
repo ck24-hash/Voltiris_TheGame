@@ -92,16 +92,14 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
     const catchUpTo = (now: number): GameState => {
       const { game, away, awayPending } = get();
       const { state, report } = catchUp(game, { now: () => now }, content);
-      if (state !== game) {
+      // The first catch-up after launch or a return covers the whole break;
+      // later ones (even late or long) are just play.
+      if (state !== game || awayPending) {
         const summary =
           awayPending && report.ticks >= AWAY_SUMMARY_MIN_TICKS
             ? mergeReports(away, report)
             : away;
-        set({
-          game: state,
-          away: summary,
-          awayPending: awayPending && report.ticks === 0,
-        });
+        set({ game: state, away: summary, awayPending: false });
       }
       return state;
     };

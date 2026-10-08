@@ -1,5 +1,6 @@
 .button {
   --face: var(--green);
+  --face-light: var(--green-light);
   --edge: var(--green-dark);
   display: inline-flex;
   align-items: center;
@@ -9,11 +10,7 @@
   padding: 6px 18px;
   border: 2.5px solid var(--edge);
   border-radius: 14px;
-  background: linear-gradient(
-    to bottom,
-    color-mix(in srgb, var(--face), #fff 25%),
-    var(--face) 55%
-  );
+  background: linear-gradient(to bottom, var(--face-light), var(--face) 55%);
   box-shadow:
     0 4px 0 var(--edge),
     inset 0 2px 0 rgb(255 255 255 / 35%);
@@ -36,11 +33,13 @@
 
 .button:disabled {
   --face: #b9bfbb;
+  --face-light: #cdd2ce;
   --edge: #8a918c;
 }
 
 .gold {
   --face: var(--gold);
+  --face-light: var(--gold-light);
   --edge: var(--gold-dark);
   color: #5a3a06;
   text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
@@ -48,11 +47,13 @@
 
 .red {
   --face: var(--red);
+  --face-light: var(--red-light);
   --edge: var(--red-dark);
 }
 
 .blue {
   --face: var(--blue);
+  --face-light: var(--blue-light);
   --edge: var(--blue-dark);
 }
 

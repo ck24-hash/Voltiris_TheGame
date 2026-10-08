@@ -18,6 +18,8 @@ export default defineConfig([
     '**/coverage',
     'apps/mobile/android',
     'apps/mobile/ios',
+    'apps/mobile/e2e/results',
+    'apps/mobile/e2e/report',
   ]),
 
   {

@@ -21,3 +21,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Playwright
+apps/mobile/e2e/results/
+apps/mobile/e2e/report/

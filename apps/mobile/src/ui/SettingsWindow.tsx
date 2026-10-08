@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useGame, useGameStore } from '../game/context';
 import { useServices } from '../game/services';
 import { saveFileName } from '../save/exportText';
-import { describeLoadError } from '../save/messages';
+import { describeLoadError, EXPORT_MESSAGES } from '../save/messages';
 import { readSaveText, saveFileToText, toSaveFile } from '../save/saveFile';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
@@ -58,12 +58,9 @@ function ExportButton() {
     const { game, notify } = store.getState();
     const text = saveFileToText(toSaveFile(game, now()));
     try {
-      const method = await exportText(text, saveFileName(now()));
-      notify(
-        method === 'copied'
-          ? 'Save copied to the clipboard'
-          : 'Save file downloaded',
-      );
+      const message =
+        EXPORT_MESSAGES[await exportText(text, saveFileName(now()))];
+      if (message) notify(message);
     } catch {
       notify('Could not export the save', 'error');
     }

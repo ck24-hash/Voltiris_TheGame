@@ -1,4 +1,12 @@
+import type { ExportMethod } from '../game/services';
 import type { LoadError } from './loadGame';
+
+/** What to tell the player after an export; nothing if they closed the share sheet. */
+export const EXPORT_MESSAGES: Record<ExportMethod, string | null> = {
+  downloaded: 'Save file downloaded',
+  shared: 'Save shared',
+  cancelled: null,
+};
 
 /** What went wrong with a save, in words for the player. */
 export function describeLoadError(error: LoadError): string {
