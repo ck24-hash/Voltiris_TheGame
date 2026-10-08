@@ -94,8 +94,9 @@ test('keeps the game when the app closes and sums up the time away', async ({
   page,
   context,
 }, info) => {
-  const start = new Date('2026-10-08T10:00:00Z');
-  await page.clock.install({ time: start });
+  // The game opens twice, which takes a while where the map draws in software.
+  test.slow();
+  await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
   await openGame(page);
   await tap(page, plotOnScreen(page, 1));
   await page.getByRole('button', { name: 'Plant Pepper' }).click();
@@ -104,12 +105,13 @@ test('keeps the game when the app closes and sums up the time away', async ({
   );
   // The save after an action is written straight away; give it a moment.
   await page.waitForTimeout(1000);
+  const closedAt = await page.evaluate(() => Date.now());
   await page.close();
 
   // Two hours later, the player opens the game again.
   const later = await context.newPage();
   errors = collectErrors(later);
-  await later.clock.setSystemTime(new Date(start.getTime() + 2 * HOUR));
+  await later.clock.setSystemTime(new Date(closedAt + 2 * HOUR));
   await openGame(later);
   const welcome = later.getByRole('dialog', { name: 'Welcome back!' });
   await expect(welcome).toContainText('You were away for 2 h');
