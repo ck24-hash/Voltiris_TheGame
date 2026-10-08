@@ -56,6 +56,11 @@ export interface TimeConfig {
   readonly realMsPerTick: number;
   /** In-game days per season; a year is four seasons. */
   readonly daysPerSeason: number;
+  /**
+   * Longest stretch of real time simulated after a break (app closed or
+   * asleep). Anything beyond it is skipped.
+   */
+  readonly maxCatchUpMs: number;
 }
 
 export interface StartingGreenhouseConfig {

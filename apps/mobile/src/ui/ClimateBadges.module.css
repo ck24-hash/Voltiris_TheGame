@@ -1,0 +1,104 @@
+.panel {
+  position: absolute;
+  top: 62px;
+  left: var(--edge-left);
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  pointer-events: none;
+}
+
+.badge {
+  --status: var(--idle);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 104px;
+  height: 38px;
+  padding: 0 12px 0 3px;
+  border: 2px solid var(--hud-edge);
+  border-radius: 19px;
+  background: var(--hud);
+  box-shadow: var(--drop);
+  color: #fff;
+  text-shadow: var(--text-outline);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--status);
+  border-radius: 50%;
+  background: #6d7b70;
+  color: #fff;
+  text-shadow: none;
+}
+
+.icon[data-variable='temperature'] {
+  background: #e8603c;
+}
+
+.icon[data-variable='humidity'] {
+  background: #3b9ad9;
+}
+
+.icon[data-variable='co2'] {
+  background: #8a98a3;
+}
+
+.icon[data-variable='light'] {
+  background: #f2b01e;
+}
+
+.icon[data-variable='water'] {
+  background: #2bb3c0;
+}
+
+.icon[data-variable='nutrients'] {
+  background: #9a6ad6;
+}
+
+.text {
+  display: grid;
+  line-height: 1.05;
+}
+
+.value {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.note {
+  color: var(--status);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.idle {
+  --status: var(--idle);
+}
+
+.good {
+  --status: var(--good);
+}
+
+.warn {
+  --status: var(--warn);
+}
+
+.bad {
+  --status: var(--bad);
+}
+
+/* Short screens: two columns. */
+@media (max-height: 340px) {
+  .panel {
+    grid-template-columns: auto auto;
+  }
+}

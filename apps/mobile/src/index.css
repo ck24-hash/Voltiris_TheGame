@@ -1,16 +1,30 @@
 :root {
-  --ink: #1f3b2b;
-  --muted: #5d7266;
-  --accent: #2f8f46;
-  --good: #2e9e4f;
-  --warn: #e08a1e;
-  --bad: #d64541;
-  --idle: #9aa5a0;
-  --chip: #eef4ec;
-  --panel: rgb(255 255 255 / 92%);
-  --panel-solid: #fff;
-  --backdrop: rgb(191 230 255 / 85%);
-  --shadow: 0 2px 6px rgb(0 0 0 / 15%);
+  --font: 'Fredoka Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ink: #2b3a2e;
+  --muted: #6d7b70;
+  --cream: #fff8e8;
+  --cream-dark: #f3e4c2;
+  --wood: #b07a45;
+  --wood-dark: #6b4423;
+  --green: #4cb050;
+  --green-dark: #2e7d32;
+  --gold: #ffc93c;
+  --gold-dark: #c98a12;
+  --red: #e5533d;
+  --red-dark: #a8321f;
+  --blue: #45a6e0;
+  --blue-dark: #2471a3;
+  --good: #3fbf55;
+  --warn: #ffab2e;
+  --bad: #ff5a45;
+  --idle: #a7b0aa;
+  /* Dark glass behind HUD text on the bright map. */
+  --hud: rgb(26 46 34 / 80%);
+  --hud-edge: rgb(255 255 255 / 30%);
+  --drop: 0 3px 0 rgb(0 0 0 / 22%), 0 6px 14px rgb(0 0 0 / 18%);
+  --text-outline: 0 2px 0 rgb(0 0 0 / 35%), 0 0 3px rgb(0 0 0 / 35%);
+  --edge-left: max(8px, env(safe-area-inset-left));
+  --edge-right: max(8px, env(safe-area-inset-right));
 }
 
 *,
@@ -29,13 +43,9 @@ body,
 }
 
 body {
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  background: #bfe6ff;
+  font-family: var(--font);
+  font-weight: 500;
+  background: #8bc962;
   color: var(--ink);
   user-select: none;
   -webkit-user-select: none;
@@ -43,11 +53,24 @@ body {
   touch-action: manipulation;
 }
 
-button {
+button,
+input,
+textarea {
   font: inherit;
+  color: inherit;
+}
+
+button {
   cursor: pointer;
 }
 
 button:disabled {
   cursor: default;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
 }

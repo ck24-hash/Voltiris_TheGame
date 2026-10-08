@@ -60,4 +60,9 @@ describe('time', () => {
   it('has 15 in-game days per season', () => {
     expect(time.daysPerSeason).toBe(15);
   });
+
+  it('catches up at most 24 real hours after a break', () => {
+    expect(time.maxCatchUpMs).toBe(24 * 60 * 60 * 1000);
+    expect(time.maxCatchUpMs % time.realMsPerTick).toBe(0);
+  });
 });

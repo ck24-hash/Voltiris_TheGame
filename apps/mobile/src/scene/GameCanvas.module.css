@@ -9,9 +9,62 @@
   display: block;
 }
 
+/* Name tags over the buildings; moved by the camera, not by React. */
+.labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border: 2.5px solid #fff;
+  border-radius: 15px;
+  background: var(--hud);
+  box-shadow: var(--drop);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: var(--text-outline);
+  white-space: nowrap;
+  transform: translate(-9999px, 0);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.label::after {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -7px;
+  border: 7px solid transparent;
+  border-top-color: #fff;
+  border-bottom: 0;
+  content: '';
+}
+
+.soon {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--gold);
+  color: #5a3a06;
+  font-size: 11px;
+  text-shadow: none;
+}
+
 .fps {
   position: absolute;
-  right: 8px;
+  right: var(--edge-right);
   bottom: 8px;
   padding: 2px 8px;
   border-radius: 8px;

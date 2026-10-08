@@ -2,6 +2,7 @@
 
 import { defaultContent } from '@voltiris/content';
 import { createGame, createManualClock } from '@voltiris/sim';
+import type { AppLifecycle } from './lifecycle';
 import { createGameStore } from './store';
 
 export function createTestStore(seed = 1) {
@@ -19,6 +20,27 @@ export function createTestStore(seed = 1) {
     game,
   });
   return { clock, store };
+}
+
+/** A lifecycle the test drives by hand: hide() and show() the app. */
+export function createFakeLifecycle() {
+  const hideListeners = new Set<() => void>();
+  const showListeners = new Set<() => void>();
+  const listen = (set: Set<() => void>) => (listener: () => void) => {
+    set.add(listener);
+    return () => {
+      set.delete(listener);
+    };
+  };
+  const lifecycle: AppLifecycle = {
+    onHide: listen(hideListeners),
+    onShow: listen(showListeners),
+  };
+  return {
+    lifecycle,
+    hide: () => hideListeners.forEach((l) => l()),
+    show: () => showListeners.forEach((l) => l()),
+  };
 }
 
 export function firstGreenhouseOf(

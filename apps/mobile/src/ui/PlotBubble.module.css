@@ -1,0 +1,276 @@
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.bubble {
+  position: absolute;
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  border: 3px solid var(--wood-dark);
+  border-radius: 18px;
+  background: var(--cream);
+  box-shadow:
+    0 4px 0 var(--wood-dark),
+    0 10px 24px rgb(0 0 0 / 25%);
+  pointer-events: auto;
+  touch-action: pan-y;
+  animation: pop 160ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.above {
+  transform-origin: bottom center;
+}
+
+.below {
+  transform-origin: top center;
+}
+
+/* The tail: a rotated square that points at the plot. */
+.tail {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border: 3px solid var(--wood-dark);
+  background: var(--cream);
+  transform: rotate(45deg);
+}
+
+.tail-above {
+  margin-top: -12px;
+  border-top: none;
+  border-left: none;
+}
+
+.tail-below {
+  margin-top: -6px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.header strong {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.seeds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seed {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 4px 8px;
+  border: 2.5px solid var(--wood);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 3px 0 var(--wood);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.seed:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--wood);
+}
+
+.seed strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.seedIcon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 2px;
+  border-radius: 50%;
+  background: var(--cream-dark);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.price {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+}
+
+.speed {
+  margin-top: 3px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--good);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.slow {
+  background: var(--warn);
+}
+
+.cropIcon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--cream-dark);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.cropName {
+  display: grid;
+  line-height: 1.1;
+}
+
+.badge {
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: var(--green);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.badgeReady {
+  background: var(--gold);
+  color: #5a3a06;
+}
+
+.meter {
+  position: relative;
+  height: 20px;
+  overflow: hidden;
+  border: 2.5px solid var(--wood-dark);
+  border-radius: 10px;
+  background: var(--cream-dark);
+}
+
+.meterFill {
+  height: 100%;
+  background: linear-gradient(to bottom, #7fd86b, var(--green));
+}
+
+.meterText {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-shadow: var(--text-outline);
+}
+
+.line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 7px 0 0;
+  font-size: 13px;
+}
+
+.line strong {
+  font-weight: 700;
+}
+
+.dot {
+  color: var(--muted);
+}
+
+.muted {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.perfect {
+  margin: 8px 0 0;
+  color: var(--green-dark);
+  font-weight: 700;
+}
+
+.issues {
+  margin-top: 8px;
+}
+
+.issuesTitle {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.issues ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 3px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issues li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 5px;
+  border-radius: 10px;
+  background: var(--warn);
+  color: #fff;
+  font-size: 12px;
+}
+
+.issues li.bad {
+  background: var(--bad);
+}
+
+.issueLabel {
+  opacity: 0.9;
+}
+
+.wide {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--red-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+}

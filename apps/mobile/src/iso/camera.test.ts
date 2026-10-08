@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   clampCamera,
+  clampToRect,
   containerTransform,
   fitCamera,
+  fitZoom,
   panCamera,
   pinchCamera,
   screenToWorld,
@@ -16,7 +18,12 @@ const vp = { width: 800, height: 400 };
 const limits: CameraLimits = {
   minZoom: 0.5,
   maxZoom: 2,
-  bounds: { minX: -1000, minY: -1000, maxX: 1000, maxY: 1000 },
+  clampCenter: clampToRect({
+    minX: -1000,
+    minY: -1000,
+    maxX: 1000,
+    maxY: 1000,
+  }),
 };
 const cam: Camera = { x: 100, y: 50, zoom: 1.5 };
 
@@ -92,5 +99,31 @@ describe('camera', () => {
       24,
     );
     expect(wide.zoom).toBeCloseTo(0.5, 10);
+  });
+
+  it('centres a fitted rectangle in the screen area left free by the UI', () => {
+    const rect = { minX: 0, minY: 0, maxX: 200, maxY: 100 };
+    const insets = { top: 40, right: 0, bottom: 0, left: 200 };
+    const fitted = fitCamera(rect, vp, limits, 0, insets);
+    // Free area: 600 × 360 px → zoom 3, clamped to the max of 2.
+    expect(fitted.zoom).toBe(2);
+    const centre = worldToScreen({ x: 100, y: 50 }, fitted, vp);
+    expect(centre.x).toBeCloseTo(200 + 600 / 2, 10);
+    expect(centre.y).toBeCloseTo(40 + 360 / 2, 10);
+  });
+
+  it('finds the zoom that fits a rectangle', () => {
+    const rect = { minX: 0, minY: 0, maxX: 400, maxY: 100 };
+    expect(fitZoom(rect, 800, 400)).toBe(2);
+    expect(fitZoom(rect, 200, 400)).toBe(0.5);
+  });
+
+  it('lets the limits decide where the centre may go', () => {
+    const onlyOrigin = { ...limits, clampCenter: () => ({ x: 0, y: 0 }) };
+    expect(panCamera(cam, 500, 500, onlyOrigin)).toEqual({
+      x: 0,
+      y: 0,
+      zoom: 1.5,
+    });
   });
 });

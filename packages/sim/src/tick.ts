@@ -18,7 +18,8 @@ export function tick(state: GameState, content: GameContent): GameState {
 
 /**
  * Runs every tick that has come due by `clock.now()`. Leftover time below one
- * tick carries over, so ticks never drift. If the clock went backwards (the
+ * tick carries over, so ticks never drift. At most `maxCatchUpMs` of real time
+ * is simulated; time beyond that is skipped. If the clock went backwards (the
  * device time was changed), time restarts from now instead of freezing until
  * the clock catches up.
  */
@@ -35,9 +36,11 @@ export function advance(
   const due = ticksDue(state.clock.lastTickAt, now, realMsPerTick);
   if (due === 0) return state;
 
+  const run = Math.min(due, maxCatchUpTicks(content));
   let next = state;
-  for (let i = 0; i < due; i++) next = tick(next, content);
+  for (let i = 0; i < run; i++) next = tick(next, content);
 
+  // Skipped ticks still use up their time, so the game resumes from now.
   return {
     ...next,
     clock: {
@@ -45,6 +48,11 @@ export function advance(
       lastTickAt: state.clock.lastTickAt + due * realMsPerTick,
     },
   };
+}
+
+/** Most ticks one call to `advance` runs. */
+export function maxCatchUpTicks(content: GameContent): number {
+  return Math.floor(content.time.maxCatchUpMs / content.time.realMsPerTick);
 }
 
 function tickGreenhouse(

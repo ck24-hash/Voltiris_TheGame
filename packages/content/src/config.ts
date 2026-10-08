@@ -10,6 +10,7 @@ import type {
 export const TIME: TimeConfig = {
   realMsPerTick: 15_000,
   daysPerSeason: 15,
+  maxCatchUpMs: 24 * 60 * 60 * 1000,
 };
 
 export const STARTING_GREENHOUSE: StartingGreenhouseConfig = {

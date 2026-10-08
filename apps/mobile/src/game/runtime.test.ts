@@ -28,12 +28,12 @@ describe('readDevFlags', () => {
 });
 
 describe('createScaledClock', () => {
-  it('runs faster than its base clock from the moment it starts', () => {
+  it('scales all real time, so time away from the app is sped up too', () => {
     const base = createManualClock(1000);
     const fast = createScaledClock(base, 60);
-    expect(fast.now()).toBe(1000);
-    base.advance(1000);
-    expect(fast.now()).toBe(61_000);
+    const before = fast.now();
+    base.advance(30_000);
+    expect(fast.now() - before).toBe(30 * 60_000);
   });
 
   it('is the base clock at speed 1', () => {

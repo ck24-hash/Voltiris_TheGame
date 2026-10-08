@@ -1,31 +1,24 @@
 import styles from './App.module.css';
-import { useGame } from './game/context';
 import { GameCanvas } from './scene/GameCanvas';
-import { BottomNav } from './ui/BottomNav';
-import { ComingSoon } from './ui/ComingSoon';
-import { GaugePanel } from './ui/GaugePanel';
+import { ClimateBadges } from './ui/ClimateBadges';
 import { Hud } from './ui/Hud';
-import { PlantPanel } from './ui/PlantPanel';
+import { PlotBubble } from './ui/PlotBubble';
+import { Toast } from './ui/Toast';
+import { Windows } from './ui/Windows';
 
+/**
+ * The map fills the screen. The buildings on it open the game modes, the HUD
+ * sits at the top, the climate down the left edge.
+ */
 export function App({ debug = false }: { debug?: boolean }) {
-  const tab = useGame((s) => s.tab);
-
   return (
-    <div className={styles.app}>
-      <main className={styles.stage}>
-        {/* The canvas stays mounted on every tab, so Pixi only starts once. */}
-        <GameCanvas debug={debug} />
-        {tab === 'greenhouse' ? (
-          <>
-            <GaugePanel />
-            <PlantPanel />
-          </>
-        ) : (
-          <ComingSoon tab={tab} />
-        )}
-        <Hud />
-      </main>
-      <BottomNav />
-    </div>
+    <main className={styles.stage}>
+      <GameCanvas debug={debug} />
+      <ClimateBadges />
+      <Hud />
+      <PlotBubble />
+      <Windows />
+      <Toast />
+    </main>
   );
 }

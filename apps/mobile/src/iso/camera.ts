@@ -22,8 +22,26 @@ export interface Rect {
 export interface CameraLimits {
   readonly minZoom: number;
   readonly maxZoom: number;
-  /** The camera centre stays inside these world bounds. */
-  readonly bounds: Rect;
+  /** Moves a camera centre back inside the area it may look at. */
+  readonly clampCenter: (center: Point) => Point;
+}
+
+/** Screen space covered by UI on each side, so the camera can work around it. */
+export interface Insets {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+}
+
+const NO_INSETS: Insets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/** Keeps the camera centre inside a rectangle. */
+export function clampToRect(rect: Rect): (center: Point) => Point {
+  return (p) => ({
+    x: clamp(p.x, rect.minX, rect.maxX),
+    y: clamp(p.y, rect.minY, rect.maxY),
+  });
 }
 
 export function screenToWorld(s: Point, cam: Camera, vp: Viewport): Point {
@@ -53,12 +71,8 @@ export function containerTransform(
 }
 
 export function clampCamera(cam: Camera, limits: CameraLimits): Camera {
-  const { bounds } = limits;
-  return {
-    x: clamp(cam.x, bounds.minX, bounds.maxX),
-    y: clamp(cam.y, bounds.minY, bounds.maxY),
-    zoom: clamp(cam.zoom, limits.minZoom, limits.maxZoom),
-  };
+  const { x, y } = limits.clampCenter(cam);
+  return { x, y, zoom: clamp(cam.zoom, limits.minZoom, limits.maxZoom) };
 }
 
 /** Moves the view by a drag of (dx, dy) screen pixels. */
@@ -110,24 +124,40 @@ export function pinchCamera(
   return panCamera(zoomed, to.x - from.x, to.y - from.y, limits);
 }
 
-/** Centres on `rect` with the largest zoom that fits it, minus padding. */
+/** The largest zoom at which `rect` fits in a `width` × `height` screen area. */
+export function fitZoom(rect: Rect, width: number, height: number): number {
+  const zoom = Math.min(
+    width / Math.max(1, rect.maxX - rect.minX),
+    height / Math.max(1, rect.maxY - rect.minY),
+  );
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
+/**
+ * Shows `rect` as large as it fits, minus padding, centred in the part of the
+ * screen not covered by UI (`insets`).
+ */
 export function fitCamera(
   rect: Rect,
   vp: Viewport,
   limits: CameraLimits,
   paddingPx = 24,
+  insets: Insets = NO_INSETS,
 ): Camera {
-  const width = Math.max(1, rect.maxX - rect.minX);
-  const height = Math.max(1, rect.maxY - rect.minY);
-  const zoom = Math.min(
-    (vp.width - 2 * paddingPx) / width,
-    (vp.height - 2 * paddingPx) / height,
+  const zoom = clamp(
+    fitZoom(
+      rect,
+      vp.width - insets.left - insets.right - 2 * paddingPx,
+      vp.height - insets.top - insets.bottom - 2 * paddingPx,
+    ),
+    limits.minZoom,
+    limits.maxZoom,
   );
   return clampCamera(
     {
-      x: (rect.minX + rect.maxX) / 2,
-      y: (rect.minY + rect.maxY) / 2,
-      zoom: Number.isFinite(zoom) && zoom > 0 ? zoom : 1,
+      x: (rect.minX + rect.maxX) / 2 - (insets.left - insets.right) / 2 / zoom,
+      y: (rect.minY + rect.maxY) / 2 - (insets.top - insets.bottom) / 2 / zoom,
+      zoom,
     },
     limits,
   );

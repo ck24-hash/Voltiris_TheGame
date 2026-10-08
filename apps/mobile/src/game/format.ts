@@ -60,16 +60,26 @@ export function formatGameHours(hours: number): string {
   return rest === 0 ? `${days} d` : `${days} d ${rest} h`;
 }
 
-/** Real-world duration: "about 2 h 15 min", "about 45 s". */
-export function formatRealDuration(ms: number): string {
-  if (!Number.isFinite(ms)) return 'never';
+/** Real-world duration: "45 s", "2 h 15 min", "3 days 4 h". */
+export function formatDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
-  if (totalSeconds < 60) return `about ${totalSeconds} s`;
+  if (totalSeconds < 60) return `${totalSeconds} s`;
   const totalMinutes = Math.round(totalSeconds / 60);
-  if (totalMinutes < 60) return `about ${totalMinutes} min`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes === 0 ? `about ${hours} h` : `about ${hours} h ${minutes} min`;
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours < 24) {
+    const minutes = totalMinutes % 60;
+    return minutes === 0 ? `${totalHours} h` : `${totalHours} h ${minutes} min`;
+  }
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const dayText = days === 1 ? '1 day' : `${days.toLocaleString('en-US')} days`;
+  return hours === 0 ? dayText : `${dayText} ${hours} h`;
+}
+
+/** An estimated real-world duration: "about 2 h 15 min". */
+export function formatRealDuration(ms: number): string {
+  return Number.isFinite(ms) ? `about ${formatDuration(ms)}` : 'never';
 }
 
 export function formatPercent(fraction: number): string {

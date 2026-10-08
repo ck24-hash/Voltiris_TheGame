@@ -7,6 +7,7 @@ import {
   formatGameHours,
   formatPercent,
   formatPrice,
+  formatDuration,
   formatRealDuration,
   formatSeason,
 } from './format';
@@ -61,6 +62,13 @@ describe('time', () => {
     expect(formatRealDuration(3 * 3_600_000)).toBe('about 3 h');
     expect(formatRealDuration(2 * 3_600_000 + 15 * 60_000)).toBe(
       'about 2 h 15 min',
+    );
+  });
+
+  it('counts long breaks in days', () => {
+    expect(formatDuration(24 * 3_600_000)).toBe('1 day');
+    expect(formatDuration(3 * 24 * 3_600_000 + 4 * 3_600_000)).toBe(
+      '3 days 4 h',
     );
   });
 });

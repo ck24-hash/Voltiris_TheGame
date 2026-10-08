@@ -1,0 +1,64 @@
+.button {
+  --face: var(--green);
+  --edge: var(--green-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 6px 18px;
+  border: 2.5px solid var(--edge);
+  border-radius: 14px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--face), #fff 25%),
+    var(--face) 55%
+  );
+  box-shadow:
+    0 4px 0 var(--edge),
+    inset 0 2px 0 rgb(255 255 255 / 35%);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  text-shadow: 0 1.5px 0 rgb(0 0 0 / 30%);
+  white-space: nowrap;
+  transition:
+    transform 60ms,
+    box-shadow 60ms;
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    0 1px 0 var(--edge),
+    inset 0 2px 0 rgb(255 255 255 / 35%);
+}
+
+.button:disabled {
+  --face: #b9bfbb;
+  --edge: #8a918c;
+}
+
+.gold {
+  --face: var(--gold);
+  --edge: var(--gold-dark);
+  color: #5a3a06;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
+}
+
+.red {
+  --face: var(--red);
+  --edge: var(--red-dark);
+}
+
+.blue {
+  --face: var(--blue);
+  --edge: var(--blue-dark);
+}
+
+.small {
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+}

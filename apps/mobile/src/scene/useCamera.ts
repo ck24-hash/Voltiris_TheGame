@@ -11,12 +11,15 @@ import {
   clampCamera,
   containerTransform,
   fitCamera,
+  fitZoom,
   panCamera,
   pinchCamera,
   screenToWorld,
+  worldToScreen,
   zoomCameraAt,
   type Camera,
   type CameraLimits,
+  type Insets,
   type Viewport,
 } from '../iso/camera';
 import {
@@ -25,44 +28,52 @@ import {
   type PointerSample,
 } from '../iso/gestures';
 import {
-  greenhouseBounds,
-  groundBounds,
+  clampToLot,
+  yardBounds,
+  lotBounds,
   type SceneLayout,
 } from '../iso/layout';
 import type { Point } from '../iso/projection';
 
-const MIN_ZOOM = 0.35;
 const MAX_ZOOM = 2.5;
 const WHEEL_ZOOM_SPEED = 0.0015;
 
+export type ToScreen = (world: Point) => Point;
+
+export interface CameraEvents {
+  /** A tap, in world coordinates. */
+  readonly onTap: (world: Point, toScreen: ToScreen) => void;
+  /** The view was panned, zoomed or resized. */
+  readonly onMove: () => void;
+  /** After every camera change: where world points now are on screen. */
+  readonly onChange: (toScreen: ToScreen) => void;
+}
+
 /**
- * Pan, pinch-zoom and tap handling for the world container. The camera lives
- * in refs and is written straight to the Pixi container, so gestures never
- * re-render React.
+ * Pan, pinch-zoom and tap handling for the world container. The camera stays
+ * over the player's lot, and zooms out no further than showing all of it. It
+ * lives in refs and is written straight to the Pixi container, so gestures
+ * never re-render React.
  */
 export function useCamera(
   hostRef: RefObject<HTMLDivElement | null>,
   layout: SceneLayout,
-  onTapWorld: (world: Point) => void,
+  events: CameraEvents,
+  insets: Insets,
 ) {
   const containerRef = useRef<Container | null>(null);
   const cameraRef = useRef<Camera | null>(null);
   const viewportRef = useRef<Viewport>({ width: 0, height: 0 });
-
-  const limits = useMemo<CameraLimits>(
-    () => ({
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-      bounds: groundBounds(layout),
-    }),
-    [layout],
-  );
-  const limitsRef = useRef(limits);
-  const onTapRef = useRef(onTapWorld);
+  const limitsRef = useRef<CameraLimits | null>(null);
+  const eventsRef = useRef(events);
   useEffect(() => {
-    limitsRef.current = limits;
-    onTapRef.current = onTapWorld;
-  }, [limits, onTapWorld]);
+    eventsRef.current = events;
+  }, [events]);
+
+  const toScreen = useCallback<ToScreen>((world) => {
+    const camera = cameraRef.current;
+    return camera ? worldToScreen(world, camera, viewportRef.current) : world;
+  }, []);
 
   const apply = useCallback(() => {
     const container = containerRef.current;
@@ -71,64 +82,72 @@ export function useCamera(
     const t = containerTransform(camera, viewportRef.current);
     container.position.set(t.x, t.y);
     container.scale.set(t.scale);
-  }, []);
+    eventsRef.current.onChange(toScreen);
+  }, [toScreen]);
 
   const update = useCallback(
-    (next: (camera: Camera) => Camera) => {
+    (next: (camera: Camera, limits: CameraLimits) => Camera) => {
       const camera = cameraRef.current;
-      if (!camera) return;
-      cameraRef.current = next(camera);
+      const limits = limitsRef.current;
+      if (!camera || !limits) return;
+      cameraRef.current = next(camera, limits);
       apply();
+      eventsRef.current.onMove();
     },
     [apply],
   );
 
-  // Fit the greenhouse on first layout, then keep the camera valid on resize.
+  // Show the whole yard at first; keep the camera valid on resize.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     const onResize = () => {
       const viewport = { width: host.clientWidth, height: host.clientHeight };
       if (viewport.width === 0 || viewport.height === 0) return;
+      const limits: CameraLimits = {
+        minZoom: Math.min(
+          1,
+          fitZoom(lotBounds(layout), viewport.width, viewport.height),
+        ),
+        maxZoom: MAX_ZOOM,
+        clampCenter: clampToLot(layout),
+      };
       viewportRef.current = viewport;
+      limitsRef.current = limits;
       cameraRef.current = cameraRef.current
         ? clampCamera(cameraRef.current, limits)
-        : fitCamera(greenhouseBounds(layout), viewport, limits);
+        : fitCamera(yardBounds(layout), viewport, limits, 8, insets);
       apply();
+      eventsRef.current.onMove();
     };
     onResize();
     const observer = new ResizeObserver(onResize);
     observer.observe(host);
     return () => observer.disconnect();
-  }, [hostRef, layout, limits, apply]);
+  }, [hostRef, layout, insets, apply]);
 
   const trackerRef = useRef<GestureTracker | null>(null);
   useEffect(() => {
     trackerRef.current = createGestureTracker({
-      pan: (dx, dy) =>
-        update((cam) => panCamera(cam, dx, dy, limitsRef.current)),
+      pan: (dx, dy) => update((cam, limits) => panCamera(cam, dx, dy, limits)),
       pinch: (from, to, scale) =>
-        update((cam) =>
-          pinchCamera(
-            cam,
-            viewportRef.current,
-            from,
-            to,
-            scale,
-            limitsRef.current,
-          ),
+        update((cam, limits) =>
+          pinchCamera(cam, viewportRef.current, from, to, scale, limits),
         ),
       tap: (point) => {
         const camera = cameraRef.current;
         if (camera) {
-          onTapRef.current(screenToWorld(point, camera, viewportRef.current));
+          eventsRef.current.onTap(
+            screenToWorld(point, camera, viewportRef.current),
+            toScreen,
+          );
         }
       },
     });
     return () => {
       trackerRef.current = null;
     };
-  }, [update]);
+  }, [update, toScreen]);
 
   // Native, non-passive wheel listener: React's onWheel is passive, so it
   // cannot stop a trackpad pinch (ctrl+wheel) from also zooming the page.
@@ -140,14 +159,8 @@ export function useCamera(
       const rect = host.getBoundingClientRect();
       const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
       const factor = Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED);
-      update((cam) =>
-        zoomCameraAt(
-          cam,
-          viewportRef.current,
-          point,
-          factor,
-          limitsRef.current,
-        ),
+      update((cam, limits) =>
+        zoomCameraAt(cam, viewportRef.current, point, factor, limits),
       );
     };
     host.addEventListener('wheel', onWheel, { passive: false });

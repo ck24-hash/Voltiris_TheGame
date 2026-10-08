@@ -2,7 +2,7 @@ import { defaultContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { createManualClock } from './clock';
 import { createGame } from './newGame';
-import { advance, tick } from './tick';
+import { advance, maxCatchUpTicks, tick } from './tick';
 import {
   deepFreeze,
   firstGreenhouse,
@@ -169,5 +169,29 @@ describe('advance', () => {
 
     clock.advance(MS_PER_TICK);
     expect(advance(rebased, clock, defaultContent).clock.gameHour).toBe(11);
+  });
+
+  it('simulates at most 24 real hours and skips the rest', () => {
+    const { clock, state } = setup();
+    const cap = maxCatchUpTicks(defaultContent);
+    expect(cap).toBe(24 * 240);
+
+    clock.advance(30 * 60 * 60 * 1000 + MS_PER_TICK / 2);
+    const next = advance(state, clock, defaultContent);
+    expect(next.clock.gameHour).toBe(cap);
+    // The game resumes from now; the half tick of leftover time carries over.
+    expect(next.clock.lastTickAt).toBe(clock.now() - MS_PER_TICK / 2);
+
+    clock.advance(MS_PER_TICK / 2);
+    expect(advance(next, clock, defaultContent).clock.gameHour).toBe(cap + 1);
+  });
+
+  it('runs exactly the cap when exactly 24 hours are due', () => {
+    const { clock, state } = setup();
+    clock.advance(defaultContent.time.maxCatchUpMs);
+    expect(advance(state, clock, defaultContent).clock).toEqual({
+      gameHour: maxCatchUpTicks(defaultContent),
+      lastTickAt: clock.now(),
+    });
   });
 });
