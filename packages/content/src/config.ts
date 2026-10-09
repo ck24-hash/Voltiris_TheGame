@@ -2,7 +2,6 @@ import type {
   CareConfig,
   EconomyConfig,
   GrowthConfig,
-  MarketConfig,
   StorageConfig,
   TimeConfig,
 } from './types';
@@ -17,6 +16,7 @@ export const TIME: TimeConfig = {
 
 export const ECONOMY: EconomyConfig = {
   startingMoney: 500,
+  reserve: 20,
 };
 
 export const GROWTH: GrowthConfig = {
@@ -25,17 +25,8 @@ export const GROWTH: GrowthConfig = {
 
 export const CARE: CareConfig = {
   water: { amount: 10, cost: 2, max: 100 },
-  nutrients: { amount: 0.3, cost: 3, max: 6 },
 };
 
 export const STORAGE: StorageConfig = {
   capacity: 150,
-};
-
-// Swings of about ±10% around the seasonal price, settling within minutes.
-export const MARKET: MarketConfig = {
-  reversion: 0.02,
-  volatility: 0.03,
-  minSwing: 0.6,
-  maxSwing: 1.6,
 };

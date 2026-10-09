@@ -5,6 +5,7 @@ import type {
   GameContent,
   SetpointId,
 } from '@voltiris/content';
+import { record } from './books';
 import {
   fail,
   findGreenhouse,
@@ -46,12 +47,6 @@ export interface WaterCommand extends CommandMeta {
   readonly greenhouseId: string;
 }
 
-/** Feeds a greenhouse once: raises its nutrients (EC) by the care amount. */
-export interface FertilizeCommand extends CommandMeta {
-  readonly type: 'Fertilize';
-  readonly greenhouseId: string;
-}
-
 /** Picks a ready crop and puts the harvest in storage. */
 export interface HarvestCropCommand extends CommandMeta {
   readonly type: 'HarvestCrop';
@@ -59,7 +54,7 @@ export interface HarvestCropCommand extends CommandMeta {
   readonly plotId: string;
 }
 
-/** Sells units of a crop from storage at today's market price. */
+/** Sells units of a crop from storage at its fixed price. */
 export interface SellCropCommand extends CommandMeta {
   readonly type: 'SellCrop';
   readonly cropId: CropId;
@@ -114,7 +109,6 @@ export interface UpgradeGreenhouseCommand extends CommandMeta {
 export type Command =
   | PlantCropCommand
   | WaterCommand
-  | FertilizeCommand
   | HarvestCropCommand
   | SellCropCommand
   | BuyEquipmentCommand
@@ -167,9 +161,7 @@ export function applyCommand(
     case 'PlantCrop':
       return plantCrop(state, command, content);
     case 'Water':
-      return topUp(state, command.greenhouseId, 'water', content);
-    case 'Fertilize':
-      return topUp(state, command.greenhouseId, 'nutrients', content);
+      return water(state, command.greenhouseId, content);
     case 'HarvestCrop':
       return harvestCrop(state, command, content);
     case 'SellCrop':
@@ -223,37 +215,45 @@ function plantCrop(
       stress: 0,
     },
   });
-  return { ok: true, state: { ...planted, money: state.money - seedCost } };
+  return {
+    ok: true,
+    state: record(
+      { ...planted, money: state.money - seedCost },
+      { seeds: seedCost },
+    ),
+  };
 }
 
-function topUp(
+function water(
   state: GameState,
   greenhouseId: string,
-  resource: 'water' | 'nutrients',
   content: GameContent,
 ): CommandResult {
   const found = findGreenhouse(state, greenhouseId);
   if (!found.ok) return found;
   const { greenhouse } = found;
-  const { amount, cost, max } = content.care[resource];
-  const current = greenhouse.climate[resource];
+  const { amount, cost, max } = content.care.water;
+  const current = greenhouse.climate.water;
   if (current >= max) {
-    return fail('ALREADY_FULL', `The ${resource} is already at ${max}`);
+    return fail('ALREADY_FULL', `The water is already at ${max}`);
   }
   if (state.money < cost) {
-    return fail('NOT_ENOUGH_MONEY', `Topping up ${resource} costs ${cost}`);
+    return fail('NOT_ENOUGH_MONEY', `Watering costs ${cost}`);
   }
 
   const climate = {
     ...greenhouse.climate,
-    [resource]: Math.min(max, current + amount),
+    water: Math.min(max, current + amount),
   };
   return {
     ok: true,
-    state: {
-      ...updateGreenhouse(state, { ...greenhouse, climate }),
-      money: state.money - cost,
-    },
+    state: record(
+      {
+        ...updateGreenhouse(state, { ...greenhouse, climate }),
+        money: state.money - cost,
+      },
+      { water: cost },
+    ),
   };
 }
 
@@ -315,7 +315,7 @@ function sellCrop(
   }
 
   const { gameHour } = state.clock;
-  const price = cropPrice(state.market, cropId, gameHour, content);
+  const price = cropPrice(cropId, content);
   const sale = sell(
     state.storage,
     cropId,
@@ -326,11 +326,10 @@ function sellCrop(
   );
   return {
     ok: true,
-    state: {
-      ...state,
-      money: state.money + sale.revenue,
-      storage: sale.storage,
-    },
+    state: record(
+      { ...state, money: state.money + sale.revenue, storage: sale.storage },
+      { sales: sale.revenue },
+    ),
   };
 }
 

@@ -4,18 +4,17 @@ export const CLIMATE_VARIABLES = [
   'co2',
   'light',
   'water',
-  'nutrients',
 ] as const;
 
 export type ClimateVariable = (typeof CLIMATE_VARIABLES)[number];
 
 /**
  * Greenhouse climate. Units: temperature °C, humidity % RH, co2 ppm,
- * light PAR µmol/m²/s, water substrate moisture %, nutrients EC mS/cm.
+ * light PAR µmol/m²/s, water substrate moisture %.
  */
 export type Climate = Readonly<Record<ClimateVariable, number>>;
 
-/** The climate variables in the air; water and nutrients are in the substrate. */
+/** The climate variables in the air; water is in the soil. */
 export const AIR_VARIABLES = [
   'temperature',
   'humidity',
@@ -65,14 +64,10 @@ export interface CropDef {
   readonly yieldPerPlot: number;
   /** Price of the seeds (or young plants) for one plot. */
   readonly seedCost: number;
-  /** Market price per unit at full quality, before seasons and swings. */
-  readonly basePrice: number;
-  /** Price multiplier at the middle of each season; it changes gradually in between. */
-  readonly seasonalPrice: Readonly<Record<Season, number>>;
+  /** What the market pays per unit at full quality and freshness; it does not change. */
+  readonly price: number;
   /** Water one plot uses per hour of growth, in moisture % points. */
   readonly waterUse: number;
-  /** Nutrients one plot uses per hour of growth, in EC (mS/cm). */
-  readonly nutrientUse: number;
   /** In-game days the harvest keeps in storage: freshness falls to 0 over this time. */
   readonly shelfLifeDays: number;
   readonly climate: Readonly<Record<ClimateVariable, ClimateResponse>>;
@@ -92,6 +87,11 @@ export interface TimeConfig {
 
 export interface EconomyConfig {
   readonly startingMoney: number;
+  /**
+   * Running costs never take money below this, so there is always enough
+   * for seeds: the equipment pauses instead.
+   */
+  readonly reserve: number;
 }
 
 export interface GrowthConfig {
@@ -99,9 +99,9 @@ export interface GrowthConfig {
   readonly stressQualityPenalty: number;
 }
 
-/** Topping up one greenhouse resource (water or nutrients) by hand. */
+/** Watering a greenhouse by hand. */
 export interface TopUpConfig {
-  /** Added per top-up: moisture % points for water, EC for nutrients. */
+  /** Moisture % points added per watering. */
   readonly amount: number;
   readonly cost: number;
   /** Nothing is added beyond this. */
@@ -110,25 +110,11 @@ export interface TopUpConfig {
 
 export interface CareConfig {
   readonly water: TopUpConfig;
-  readonly nutrients: TopUpConfig;
 }
 
 export interface StorageConfig {
   /** Units of produce the storage holds. */
   readonly capacity: number;
-}
-
-/**
- * Market prices: each crop's price is its base price × the season's
- * multiplier × a swing factor that wanders a little every tick.
- */
-export interface MarketConfig {
-  /** Share of the way back to a swing of 1 each tick. */
-  readonly reversion: number;
-  /** Largest random change of the swing in one tick. */
-  readonly volatility: number;
-  readonly minSwing: number;
-  readonly maxSwing: number;
 }
 
 /** The weather outside. Steady until weather and seasons arrive (Phase 10). */
@@ -157,8 +143,6 @@ export interface ClimatePhysicsConfig {
   readonly ventHeatLoss: number;
   /** Humidity points the heater dries the air by, per kW of heat per plot. */
   readonly heatingDries: number;
-  /** Cooling (kW per plot) from each unit of fog that evaporates. */
-  readonly fogCooling: number;
   /** Moisture a plot gives off per hour of growth. */
   readonly transpiration: number;
   /** CO₂ a plot takes up per hour of growth. */
@@ -262,7 +246,7 @@ export interface SizeLevel {
 export interface GreenhouseConfig {
   /**
    * A new greenhouse's climate: the balance of an empty greenhouse with the
-   * first glass, plus its water and nutrients.
+   * first glass, plus its water.
    */
   readonly startingClimate: Climate;
   readonly glass: readonly GlassLevel[];
@@ -277,7 +261,7 @@ export const EQUIPMENT_KINDS = [
   'fogger',
   'co2',
   'lights',
-  'fertigation',
+  'irrigation',
 ] as const;
 
 export type EquipmentKind = (typeof EQUIPMENT_KINDS)[number];
@@ -332,15 +316,11 @@ export interface LightLevel extends EquipmentLevelBase {
   readonly heatPerPar: number;
 }
 
-export interface FertigationLevel extends EquipmentLevelBase {
+export interface IrrigationLevel extends EquipmentLevelBase {
   /** Most water added an hour, moisture % points. */
   readonly water: number;
-  /** Most nutrients added an hour, EC. */
-  readonly nutrients: number;
   /** Per % point of water. */
   readonly waterCost: number;
-  /** Per EC of nutrients. */
-  readonly nutrientCost: number;
   /** Pump power at full output, kW per plot. */
   readonly power: number;
 }
@@ -351,7 +331,7 @@ export interface EquipmentLevels {
   readonly fogger: readonly FoggerLevel[];
   readonly co2: readonly Co2Level[];
   readonly lights: readonly LightLevel[];
-  readonly fertigation: readonly FertigationLevel[];
+  readonly irrigation: readonly IrrigationLevel[];
 }
 
 export interface EquipmentConfig {
@@ -371,7 +351,6 @@ export const SETPOINT_IDS = [
   'co2',
   'light',
   'water',
-  'nutrients',
 ] as const;
 
 export type SetpointId = (typeof SETPOINT_IDS)[number];
@@ -387,7 +366,7 @@ export const EQUIPMENT_SETPOINTS: Readonly<
   fogger: ['humidityMin'],
   co2: ['co2'],
   lights: ['light'],
-  fertigation: ['water', 'nutrients'],
+  irrigation: ['water'],
 };
 
 export interface SetpointRange {
@@ -414,7 +393,6 @@ export interface GameContent {
   readonly growth: GrowthConfig;
   readonly care: CareConfig;
   readonly storage: StorageConfig;
-  readonly market: MarketConfig;
   readonly greenhouse: GreenhouseConfig;
   readonly physics: ClimatePhysicsConfig;
   readonly energy: EnergyConfig;

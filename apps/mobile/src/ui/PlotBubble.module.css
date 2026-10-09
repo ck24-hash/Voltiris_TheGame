@@ -246,8 +246,8 @@
 }
 
 .issues ul {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  justify-items: start;
   gap: 4px;
   margin: 3px 0 0;
   padding: 0;
@@ -271,6 +271,10 @@
 
 .issueLabel {
   opacity: 0.9;
+}
+
+.fix::before {
+  content: '· ';
 }
 
 .wide {

@@ -77,7 +77,7 @@ describe('game store', () => {
     expect(store.getState().game).toBe(before);
   });
 
-  it('runs the whole crop loop: plant, water, feed, harvest and sell', () => {
+  it('runs the whole crop loop: plant, water, harvest and sell', () => {
     const { clock, store } = createTestStore();
     const greenhouse = firstGreenhouseOf(store);
     const plotId = greenhouse.plots[0]?.id ?? '';
@@ -86,7 +86,6 @@ describe('game store', () => {
 
     expect(actions.plantCrop(greenhouse.id, plotId, 'microgreens')).toBeNull();
     expect(actions.water(greenhouse.id)).toBeNull();
-    expect(actions.fertilize(greenhouse.id)).toBeNull();
     expect(actions.harvestCrop(greenhouse.id, plotId)?.code).toBe('NOT_READY');
 
     clock.advance(10 * MS_PER_TICK);
@@ -97,7 +96,7 @@ describe('game store', () => {
 
     expect(store.getState().game.storage.lots).toEqual([]);
     expect(money()).toBeGreaterThan(beforeSale);
-    expect(store.getState().checkpoint).toBe(5);
+    expect(store.getState().checkpoint).toBe(4);
   });
 
   it('buys, services, sets and upgrades the greenhouse through commands', () => {
@@ -146,6 +145,19 @@ describe('game store', () => {
       selection: null,
     });
     store.getState().closeWindow();
+    expect(store.getState().window).toBeNull();
+  });
+
+  it('can start with a window open: the guide, for a new game', () => {
+    const { clock, store } = createTestStore();
+    const guided = createGameStore({
+      content: defaultContent,
+      clock,
+      newId: () => 'cmd',
+      game: store.getState().game,
+      window: 'guide',
+    });
+    expect(guided.getState().window).toBe('guide');
     expect(store.getState().window).toBeNull();
   });
 });

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import {
+  badge,
+  badges,
   buildingOnScreen,
   collectErrors,
   forSaleSignOnScreen,
@@ -24,13 +26,24 @@ test.afterEach(() => {
   expect(errors, 'errors in the page').toEqual([]);
 });
 
+test('opens a new game with the guide', async ({ page }, info) => {
+  await openGame(page, { keepGuide: true });
+  const guide = page.getByRole('dialog', { name: 'How to play' });
+  await expect(guide).toContainText('Microgreens are ready in 2 minutes');
+  await snapshot(page, info, 'guide');
+  await guide.getByRole('button', { name: /Let.s grow/ }).click();
+  await expect(guide).toBeHidden();
+  await page.getByRole('button', { name: 'How to play' }).click();
+  await expect(guide).toBeVisible();
+});
+
 test('opens on the map with the HUD, the climate and the buildings', async ({
   page,
 }, info) => {
   await openGame(page);
   await expect(page.getByText('Day 1 · 00:00')).toBeVisible();
   await expect(page.getByLabel('500 Volticoins')).toBeVisible();
-  await expect(page.getByRole('group')).toHaveCount(6);
+  await expect(badges(page)).toHaveCount(5);
   for (const name of ['Greenhouse', 'Market', 'Storage', 'Energy', 'Village']) {
     await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
   }
@@ -48,7 +61,7 @@ test('fits the screen: no page scrolling, climate badges all visible', async ({
       document.documentElement.scrollHeight <= window.innerHeight,
   );
   expect(fits).toBe(true);
-  const last = await page.getByRole('group').last().boundingBox();
+  const last = await badges(page).last().boundingBox();
   expect(last && viewport && last.y + last.height).toBeLessThanOrEqual(
     viewport?.height ?? 0,
   );
@@ -65,7 +78,7 @@ test('plants a crop from the bubble at a tapped plot', async ({
 
   await bubble.getByRole('button', { name: 'Plant Tomato' }).click();
   await expect(bubble).toContainText('Growing');
-  await expect(page.getByRole('group', { name: 'CO₂' })).toContainText('Low');
+  await expect(badge(page, 'CO₂')).toContainText('Low');
   await snapshot(page, info, 'growing-bubble');
 });
 
@@ -75,7 +88,7 @@ test('opens the game modes from the buildings on the map', async ({
   await openGame(page);
   await tap(page, buildingOnScreen(page, 'market'));
   const market = page.getByRole('dialog', { name: 'Market' });
-  await expect(market).toContainText('Prices change every hour');
+  await expect(market).toContainText('fixed price');
   await snapshot(page, info, 'market-window');
   await market.getByRole('button', { name: 'Close' }).click();
   await expect(market).toBeHidden();
@@ -147,7 +160,7 @@ test('buys a heater, and the greenhouse warms up for the cucumbers', async ({
   const bubble = page.getByRole('dialog', { name: 'Plot 1' });
   await bubble.getByRole('button', { name: 'Plant Cucumber' }).click();
   await expect(bubble).toContainText('Too cold');
-  const temperature = page.getByRole('group', { name: 'Temperature' });
+  const temperature = badge(page, 'Temperature');
   await expect(temperature).toContainText('20.0 °C');
   await expect(temperature).toHaveAttribute('data-status', 'warn');
 
@@ -173,6 +186,18 @@ test('buys a heater, and the greenhouse warms up for the cucumbers', async ({
   await tap(page, plotOnScreen(page, 0));
   await expect(bubble).not.toContainText('Too cold');
   await snapshot(page, info, 'warm-greenhouse');
+
+  // A badge explains what the crop wants; the coins show the money.
+  await tap(page, lawnOnScreen(page));
+  await temperature.click();
+  const help = page.getByRole('dialog', { name: 'Temperature' });
+  await expect(help).toContainText('Ideal for Cucumber: 22–28 °C');
+  await snapshot(page, info, 'climate-help');
+  await help.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: /Volticoins$/ }).click();
+  const money = page.getByRole('dialog', { name: 'Money' });
+  await expect(money).toContainText('Running the greenhouse costs');
+  await snapshot(page, info, 'money-window');
 });
 
 // Phase 7: solar panels make power by day, and the energy panel shows the
@@ -272,6 +297,10 @@ test('exports the save and imports it again', async ({ page }, info) => {
   await page.getByRole('button', { name: /New game/ }).click();
   await page.getByRole('button', { name: 'Start over' }).click();
   await expect(page.getByRole('status')).toContainText('New game started');
+  // A new game opens with the guide.
+  const guide = page.getByRole('dialog', { name: 'How to play' });
+  await guide.getByRole('button', { name: /Let.s grow/ }).click();
+  await expect(guide).toBeHidden();
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByRole('button', { name: /Import save/ }).click();

@@ -37,7 +37,6 @@ const VISIBLE: Record<ClimateVariable, number> = {
   co2: 100,
   light: 50,
   water: 5,
-  nutrients: 0.2,
 };
 
 interface Case {
@@ -47,7 +46,7 @@ interface Case {
   readonly direction: 1 | -1;
   readonly setpoints?: Partial<Setpoints>;
   readonly start?: GameState;
-  /** Whether the player waters and feeds by hand. */
+  /** Whether the player waters by hand. */
   readonly byHand?: boolean;
 }
 
@@ -86,9 +85,9 @@ const CASES: readonly (readonly [string, Case])[] = [
     },
   ],
   [
-    'fertigation keeps tomatoes watered and fed when nobody else does',
+    'irrigation keeps tomatoes watered when nobody else does',
     {
-      kind: 'fertigation',
+      kind: 'irrigation',
       crop: 'tomato',
       variable: 'water',
       direction: 1,
@@ -142,7 +141,7 @@ describe('each piece of equipment changes the climate and the growth', () => {
       'fogger',
       'co2',
       'lights',
-      'fertigation',
+      'irrigation',
     ];
     const bare = growCrop(newTestGame(), 'cucumber');
     const fitted = equipped(all);
@@ -164,7 +163,7 @@ describe('each piece of equipment changes the climate and the growth', () => {
 
 describe('running costs', () => {
   it('are paid every hour in whole Volticoins, the rest carried over', () => {
-    const start = equipped(['heater', 'co2']);
+    const start = plant(equipped(['heater', 'co2']), 'pepper');
     let state = start;
     let costs = 0;
     for (let i = 0; i < 50; i++) {
@@ -179,7 +178,7 @@ describe('running costs', () => {
   });
 
   it('stop the equipment when the player cannot pay', () => {
-    const broke = { ...equipped(['heater']), money: 0 };
+    const broke = { ...plant(equipped(['heater']), 'pepper'), money: 0 };
     const after = runTicks(broke, 20);
     expect(after.money).toBe(0);
     // No heat: the greenhouse stays as the sun leaves it.
@@ -189,8 +188,21 @@ describe('running costs', () => {
     );
   });
 
+  it('keep a reserve for seeds: the equipment stops before the money runs below it', () => {
+    const { reserve } = defaultContent.economy;
+    const heated = plant(equipped(['heater'], { heatTo: 30 }), 'pepper');
+    const start = { ...heated, money: reserve + 3 };
+    expect(planHour(start, defaultContent).running).toBe(true);
+    const after = runTicks(start, 50);
+    expect(after.money).toBeGreaterThanOrEqual(reserve);
+    expect(after.money).toBeLessThan(start.money);
+    expect(planHour(after, defaultContent).running).toBe(false);
+    // Enough left for seeds.
+    expect(plant(after, 'microgreens', 1).money).toBeGreaterThanOrEqual(0);
+  });
+
   it('grow with the greenhouse, while the climate stays the same', () => {
-    const small = equipped(['heater']);
+    const small = plant(equipped(['heater']), 'pepper');
     const large = withGreenhouse(small, (g) => ({
       size: 3,
       plots: [...g.plots, ...g.plots.map((p) => ({ ...p, id: `${p.id}-2` }))],
@@ -205,7 +217,7 @@ describe('running costs', () => {
 describe('wear', () => {
   /** A heater working flat out (it cannot reach 30 °C) for `hours`. */
   function hardWork(hours: number) {
-    const state = equipped(['heater'], { heatTo: 30 });
+    const state = plant(equipped(['heater'], { heatTo: 30 }), 'pepper');
     return runTicks(state, hours);
   }
 
@@ -231,7 +243,10 @@ describe('wear', () => {
 
   it('does not build up while a device idles', () => {
     // The heater keeps 10 °C: the sun alone does better.
-    const idle = runTicks(equipped(['heater'], { heatTo: 10 }), 100);
+    const idle = runTicks(
+      plant(equipped(['heater'], { heatTo: 10 }), 'pepper'),
+      100,
+    );
     expect(firstGreenhouse(idle).equipment.heater?.wear).toBe(0);
   });
 
@@ -257,19 +272,27 @@ describe('wear', () => {
   });
 });
 
-describe('the climate computer', () => {
-  it('lets the equipment idle while nothing grows, saving its running costs', () => {
-    const manual = equipped(['heater', 'co2', 'lights']);
-    const auto = withGreenhouse(manual, () => ({ computer: true, auto: true }));
-    expect(
-      planOf(firstGreenhouse(manual), defaultContent).cost,
-    ).toBeGreaterThan(0);
-    expect(planOf(firstGreenhouse(auto), defaultContent).cost).toBe(0);
+describe('resting', () => {
+  it('lets the equipment rest while nothing grows, saving its running costs', () => {
+    const empty = equipped(['heater', 'co2', 'lights']);
+    const plan = planOf(firstGreenhouse(empty));
+    expect(plan.resting).toBe(true);
+    expect(plan.cost).toBe(0);
+    expect(planHour(empty, defaultContent).cost).toBe(0);
 
-    // A crop goes in: the computer gets to work.
-    const planted = plant(auto, 'tomato');
-    expect(
-      planOf(firstGreenhouse(planted), defaultContent).cost,
-    ).toBeGreaterThan(0);
+    // A crop goes in: the equipment gets to work.
+    const planted = planOf(firstGreenhouse(plant(empty, 'tomato')));
+    expect(planted.resting).toBe(false);
+    expect(planted.cost).toBeGreaterThan(0);
+  });
+
+  it('rests again once the crops are ready', () => {
+    const { state } = growCrop(equipped(['heater', 'lights']), 'microgreens');
+    expect(planOf(firstGreenhouse(state)).resting).toBe(true);
+    const after = runTicks(state, 24);
+    expect(after.money).toBe(state.money);
+    expect(firstGreenhouse(after).equipment).toEqual(
+      firstGreenhouse(state).equipment,
+    );
   });
 });

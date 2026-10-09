@@ -1,4 +1,9 @@
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import {
+  expect,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 import { defaultContent } from '@voltiris/content';
 import { worldToScreen } from '../src/iso/camera';
 import { createLayout, WALL_HEIGHT, type BuildingId } from '../src/iso/layout';
@@ -17,11 +22,34 @@ function openingView(page: Page) {
     worldToScreen(world, firstView(layout, viewport), viewport);
 }
 
-/** Opens the game and waits for the map and the HUD. */
-export async function openGame(page: Page, path = '/'): Promise<void> {
-  await page.goto(path);
+/** A climate badge, e.g. "Temperature". */
+export function badge(page: Page, name: string): Locator {
+  return page.getByRole('button', { name: new RegExp('^' + name + ':') });
+}
+
+/** All the climate badges. */
+export function badges(page: Page): Locator {
+  return page.getByRole('button', {
+    name: /^(Temperature|Humidity|CO₂|Light|Water):/,
+  });
+}
+
+/**
+ * Opens the game and waits for the map and the HUD. A new game opens with
+ * the guide, which this closes unless `keepGuide`.
+ */
+export async function openGame(
+  page: Page,
+  { keepGuide = false }: { keepGuide?: boolean } = {},
+): Promise<void> {
+  await page.goto('/');
   await expect(page.locator('canvas')).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Temperature' })).toBeVisible();
+  await expect(badge(page, 'Temperature')).toBeVisible();
+  const guide = page.getByRole('dialog', { name: 'How to play' });
+  if (!keepGuide && (await guide.isVisible())) {
+    await guide.getByRole('button', { name: /Let.s grow/ }).click();
+    await expect(guide).toBeHidden();
+  }
 }
 
 export function plotOnScreen(page: Page, index: number): Point {

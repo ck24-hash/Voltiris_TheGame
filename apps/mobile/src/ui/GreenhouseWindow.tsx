@@ -1,24 +1,17 @@
 import {
+  CLIMATE_VARIABLES,
   EQUIPMENT_KINDS,
-  EQUIPMENT_SETPOINTS,
   type EquipmentKind,
-  type SetpointId,
-  type SetpointRange,
 } from '@voltiris/content';
 import { serviceCost, type DeviceRun, type Greenhouse } from '@voltiris/sim';
 import { useState } from 'react';
-import { describeCommandError } from '../game/commandErrors';
 import { useGame } from '../game/context';
-import {
-  formatClimate,
-  formatKw,
-  formatPercent,
-  formatPerDay,
-} from '../game/format';
+import { formatKw, formatPercent, formatPerDay } from '../game/format';
 import { equipmentPlan } from '../game/selectors';
+import { Condition } from './Condition';
 import { cx } from './cx';
 import styles from './Equipment.module.css';
-import { deviceStatus, EQUIPMENT_INFO, SETPOINT_INFO } from './equipmentInfo';
+import { deviceStatus, EQUIPMENT_INFO } from './equipmentInfo';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
 import { ComputerIcon, EquipmentIcon, GlassIcon, SizeIcon } from './icons';
@@ -65,13 +58,20 @@ function EquipmentTab({ greenhouse }: { greenhouse: Greenhouse }) {
   const content = useGame((s) => s.content);
   const { plan, running } = equipmentPlan(game, content);
   const fitted = EQUIPMENT_KINDS.some((kind) => greenhouse.equipment[kind]);
+  const { reserve } = content.economy;
 
   return (
     <>
       {!fitted ? (
         <p className={styles.intro}>
           Each device works on part of the climate, to the targets on the
-          Climate tab. It costs energy and supplies to run.
+          Climate tab. It runs only while crops grow, and costs a little energy
+          and water.
+        </p>
+      ) : plan.resting ? (
+        <p className={styles.summary}>
+          Resting: nothing is growing, so the equipment is off and costs
+          nothing.
         </p>
       ) : running ? (
         <p className={styles.summary}>
@@ -85,7 +85,8 @@ function EquipmentTab({ greenhouse }: { greenhouse: Greenhouse }) {
         </p>
       ) : (
         <p className={cx(styles.summary, styles.warning)} role="alert">
-          Not enough Volticoins: the equipment is off.
+          The equipment is off: the last {reserve} Volticoins are kept for
+          seeds.
         </p>
       )}
       <ul className={styles.list}>
@@ -95,6 +96,7 @@ function EquipmentTab({ greenhouse }: { greenhouse: Greenhouse }) {
             kind={kind}
             greenhouse={greenhouse}
             run={running ? plan.devices[kind] : undefined}
+            resting={plan.resting}
           />
         ))}
       </ul>
@@ -106,10 +108,12 @@ function EquipmentRow({
   kind,
   greenhouse,
   run,
+  resting,
 }: {
   kind: EquipmentKind;
   greenhouse: Greenhouse;
   run: DeviceRun | undefined;
+  resting: boolean;
 }) {
   const content = useGame((s) => s.content);
   const money = useGame((s) => s.game.money);
@@ -140,7 +144,7 @@ function EquipmentRow({
               {current.name} · Level {device.level} of {levels.length}
             </span>
             <span className={styles.status}>
-              {run ? deviceStatus(kind, run.load) : 'Off'}
+              {run ? deviceStatus(kind, run.load) : resting ? 'Resting' : 'Off'}
               {run && run.cost > 0 && (
                 <>
                   {' · '}
@@ -200,15 +204,9 @@ function EquipmentRow({
 }
 
 function ClimateTab({ greenhouse }: { greenhouse: Greenhouse }) {
-  const game = useGame((s) => s.game);
-  const content = useGame((s) => s.content);
-  const setSetpoint = useGame((s) => s.setSetpoint);
   const setAutoControl = useGame((s) => s.setAutoControl);
-  const notify = useGame((s) => s.notify);
   const report = useReport();
-  const { plan } = equipmentPlan(game, content);
   const auto = greenhouse.computer && greenhouse.auto;
-  const fitted = EQUIPMENT_KINDS.filter((kind) => greenhouse.equipment[kind]);
 
   return (
     <>
@@ -245,88 +243,14 @@ function ClimateTab({ greenhouse }: { greenhouse: Greenhouse }) {
           </button>
         </div>
       )}
-      {fitted.length === 0 ? (
-        <p className={styles.intro}>
-          Buy equipment to control the climate: each device works to the targets
-          you set here.
-        </p>
-      ) : (
-        <ul className={styles.list}>
-          {fitted.map((kind) => (
-            <li key={kind} className={styles.control}>
-              <span className={styles.controlName}>
-                <EquipmentIcon kind={kind} size={18} />
-                {EQUIPMENT_INFO[kind].name}
-              </span>
-              {EQUIPMENT_SETPOINTS[kind].map((id) => (
-                <SetpointStepper
-                  key={id}
-                  id={id}
-                  value={plan.setpoints[id]}
-                  now={greenhouse.climate[SETPOINT_INFO[id].variable]}
-                  disabled={auto}
-                  onChange={(value) => {
-                    const error = setSetpoint(greenhouse.id, id, value);
-                    if (error) notify(describeCommandError(error), 'error');
-                  }}
-                />
-              ))}
-            </li>
-          ))}
-        </ul>
-      )}
+      <p className={styles.intro}>
+        Keep each part of the climate in the ideal range for your crops. Each
+        piece of equipment works to the targets you set.
+      </p>
+      {CLIMATE_VARIABLES.map((variable) => (
+        <Condition key={variable} variable={variable} greenhouse={greenhouse} />
+      ))}
     </>
-  );
-}
-
-/** The next value a step away, on the step grid and inside the range. */
-function stepped(value: number, range: SetpointRange, direction: 1 | -1) {
-  const next = Math.round((value + direction * range.step) / range.step);
-  const snapped = Number((next * range.step).toFixed(6));
-  return Math.min(range.max, Math.max(range.min, snapped));
-}
-
-function SetpointStepper({
-  id,
-  value,
-  now,
-  disabled,
-  onChange,
-}: {
-  id: SetpointId;
-  value: number;
-  now: number;
-  disabled: boolean;
-  onChange: (value: number) => void;
-}) {
-  const range = useGame((s) => s.content.control.ranges[id]);
-  const { label, variable } = SETPOINT_INFO[id];
-  return (
-    <div role="group" aria-label={label} className={styles.stepper}>
-      <span className={styles.stepLabel}>
-        {label}
-        <span className={styles.muted}>Now {formatClimate(variable, now)}</span>
-      </span>
-      <button
-        type="button"
-        className={styles.step}
-        aria-label="Lower"
-        disabled={disabled || value <= range.min}
-        onClick={() => onChange(stepped(value, range, -1))}
-      >
-        −
-      </button>
-      <output className={styles.value}>{formatClimate(variable, value)}</output>
-      <button
-        type="button"
-        className={styles.step}
-        aria-label="Raise"
-        disabled={disabled || value >= range.max}
-        onClick={() => onChange(stepped(value, range, 1))}
-      >
-        +
-      </button>
-    </div>
   );
 }
 
@@ -389,7 +313,7 @@ function UpgradesTab({ greenhouse }: { greenhouse: Greenhouse }) {
         now={
           greenhouse.computer
             ? 'Installed: switch it between auto and manual on the Climate tab.'
-            : 'Sets every target for the crops growing, and lets the equipment idle when nothing grows.'
+            : 'Sets every target for the crops growing, so you do not have to.'
         }
         next={
           greenhouse.computer

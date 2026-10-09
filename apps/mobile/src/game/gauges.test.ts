@@ -1,8 +1,8 @@
 import { defaultContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
-import { readGauge } from './gauges';
+import { idealRange, readGauge } from './gauges';
 
-const { tomato, cucumber } = defaultContent.crops;
+const { tomato, cucumber, microgreens } = defaultContent.crops;
 
 describe('readGauge', () => {
   it('is idle when nothing is growing', () => {
@@ -54,6 +54,38 @@ describe('readGauge', () => {
     expect(readGauge('temperature', 20, [tomato, cucumber])).toEqual({
       status: 'warn',
       note: 'Too cold',
+    });
+  });
+});
+
+describe('idealRange', () => {
+  it('is nothing while nothing grows', () => {
+    expect(idealRange('temperature', [])).toBeNull();
+  });
+
+  it("is a crop's optimal band", () => {
+    expect(idealRange('temperature', [cucumber])).toEqual({
+      low: cucumber.climate.temperature.optimalLow,
+      high: cucumber.climate.temperature.optimalHigh,
+      shared: true,
+    });
+  });
+
+  it('is where the bands of all the crops growing overlap', () => {
+    // Tomato wants 18–26 °C, cucumber 22–28 °C.
+    expect(idealRange('temperature', [tomato, cucumber])).toEqual({
+      low: 22,
+      high: 26,
+      shared: true,
+    });
+  });
+
+  it('is the middle ground when the crops disagree', () => {
+    // Microgreens want at most 450 PAR, tomatoes at least 500.
+    expect(idealRange('light', [microgreens, tomato])).toEqual({
+      low: 450,
+      high: 500,
+      shared: false,
     });
   });
 });

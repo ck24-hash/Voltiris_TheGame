@@ -42,9 +42,21 @@ const services: AppServices = {
   exportText,
 };
 
-/** Runs a game: the loop, the autosave and the UI. */
-function play(game: GameState, restoredFromBackup = false) {
-  const store = createGameStore({ content, clock, newId: newUuid, game });
+/**
+ * Runs a game: the loop, the autosave and the UI. A new game opens with the
+ * guide.
+ */
+function play(
+  game: GameState,
+  { restoredFromBackup = false, isNew = false } = {},
+) {
+  const store = createGameStore({
+    content,
+    clock,
+    newId: newUuid,
+    game,
+    window: isNew ? 'guide' : null,
+  });
   startGameLoop(store);
   startAutosave({
     store,
@@ -83,10 +95,10 @@ async function boot() {
   const loaded = await loadGame(saveStore, content);
   switch (loaded.kind) {
     case 'empty':
-      play(services.newGame());
+      play(services.newGame(), { isNew: true });
       break;
     case 'loaded':
-      play(loaded.game, loaded.fromBackup);
+      play(loaded.game, { restoredFromBackup: loaded.fromBackup });
       break;
     case 'failed':
       console.error('[save] load failed', loaded.error);
@@ -95,7 +107,7 @@ async function boot() {
           error={loaded.error}
           raw={loaded.raw}
           onExport={(text) => exportText(text, saveFileName(Date.now()))}
-          onNewGame={() => play(services.newGame())}
+          onNewGame={() => play(services.newGame(), { isNew: true })}
         />,
       );
       break;

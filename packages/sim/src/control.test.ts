@@ -45,7 +45,6 @@ describe('autoSetpoints', () => {
       co2: ranges.co2.min,
       light: ranges.light.min,
       water: ranges.water.min,
-      nutrients: ranges.nutrients.min,
     });
   });
 
@@ -63,7 +62,6 @@ describe('autoSetpoints', () => {
     expect(targets.co2).toBeCloseTo(inside('co2', 0.1), 12);
     expect(targets.light).toBeCloseTo(inside('light', 0.1), 12);
     expect(targets.water).toBeCloseTo(inside('water', 0.5), 12);
-    expect(targets.nutrients).toBeCloseTo(inside('nutrients', 0.5), 12);
   });
 
   it('suits every crop growing where their bands overlap', () => {

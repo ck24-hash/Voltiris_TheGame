@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import saveV1 from './fixtures/save-v1.json';
 import saveV2 from './fixtures/save-v2.json';
 import saveV3 from './fixtures/save-v3.json';
+import saveV4 from './fixtures/save-v4.json';
+import { NEW_BOOKS } from './books';
 import { initialEnergy } from './energy';
-import { initialMarket } from './market';
 import {
   migrateState,
   MIGRATIONS,
@@ -88,7 +89,7 @@ describe('restoreGame', () => {
     });
   });
 
-  it('still loads a version 1 save, with an empty storage and a calm market', () => {
+  it('still loads a version 1 save, with an empty storage', () => {
     const result = restoreGame(saveV1, defaultContent);
     if (!result.ok) throw new Error(result.error.message);
     expect(result.fromVersion).toBe(1);
@@ -102,7 +103,6 @@ describe('restoreGame', () => {
       'empty',
     ]);
     expect(result.state.storage).toEqual({ lots: [] });
-    expect(result.state.market).toEqual(initialMarket());
     expect(result.state.owed).toBe(0);
     expect(result.state.greenhouses[0]).toMatchObject(PHASE_5_GREENHOUSE);
   });
@@ -124,7 +124,6 @@ describe('restoreGame', () => {
       null,
     ]);
     expect(result.state.storage.lots).toHaveLength(1);
-    expect(result.state.market.swings.strawberry).toBe(1.12);
   });
 
   it('still loads a version 3 save, with just the grid', () => {
@@ -138,6 +137,37 @@ describe('restoreGame', () => {
       wear: 0.31,
     });
     expect(result.state.energy).toEqual(initialEnergy());
+  });
+
+  it('still loads a version 4 save: no nutrients, irrigation for fertigation, fresh books', () => {
+    const result = restoreGame(saveV4, defaultContent);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.fromVersion).toBe(4);
+    expect(result.state.version).toBe(STATE_VERSION);
+    expect(result.state).not.toHaveProperty('market');
+    expect(result.state.money).toBe(1288);
+    expect(result.state.energy).toEqual({
+      solar: 1,
+      battery: 1,
+      chp: 0,
+      stored: 4.2,
+    });
+    expect(result.state.books).toEqual(NEW_BOOKS);
+    const [greenhouse] = result.state.greenhouses;
+    expect(greenhouse?.climate).toEqual({
+      temperature: 23.4,
+      humidity: 75,
+      co2: 801.2,
+      light: 500,
+      water: 65,
+    });
+    expect(greenhouse?.setpoints).not.toHaveProperty('nutrients');
+    expect(greenhouse?.setpoints.water).toBe(62);
+    expect(greenhouse?.equipment).toEqual({
+      heater: { level: 2, wear: 0.05 },
+      irrigation: { level: 1, wear: 0.2 },
+    });
+    expect(result.state.storage.lots).toHaveLength(1);
   });
 
   it('drops unknown extra fields', () => {
@@ -200,9 +230,6 @@ describe('restoreGame', () => {
     [['storage', 'lots', 0, 'quality'], 1.2, 'at most 1'],
     [['storage', 'lots', 0, 'cropId'], 'banana', 'a known crop'],
     [['storage', 'lots', 0, 'harvestedAtHour'], REMOVE, 'a number from 0 up'],
-    [['market', 'swings'], [], 'an object'],
-    [['market', 'swings', 'strawberry'], REMOVE, 'a number'],
-    [['market', 'swings', 'tomato'], 0, 'a number above 0'],
     [['owed'], REMOVE, 'a number from 0 up'],
     [['owed'], 1, 'below 1'],
     [['greenhouses', 0, 'glass'], 0, 'a number from 1 up'],
@@ -219,9 +246,12 @@ describe('restoreGame', () => {
     [['energy', 'chp'], 3, 'at most 2'],
     [['energy', 'battery'], 0.5, 'a whole number'],
     [['energy', 'stored'], 5, 'at most 0'],
-    [['energy', 'today'], null, 'an object'],
-    [['energy', 'today', 'bought'], -2, 'a number from 0 up'],
-    [['energy', 'yesterday'], 'Monday', 'an object'],
+    [['books'], REMOVE, 'an object'],
+    [['books', 'today'], null, 'an object'],
+    [['books', 'today', 'sales'], -2, 'a number from 0 up'],
+    [['books', 'today', 'boughtKwh'], 'lots', 'a number from 0 up'],
+    [['books', 'yesterday'], 'Monday', 'an object'],
+    [['books', 'yesterday', 'water'], REMOVE, 'a number from 0 up'],
   ])('rejects a bad %j, naming the field', (path, value, expected) => {
     const result = restoreGame(editedSave(path, value), defaultContent);
     expect(result).toEqual({

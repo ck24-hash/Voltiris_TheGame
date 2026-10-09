@@ -108,10 +108,11 @@ describe('PlantCrop', () => {
     ).not.toThrow();
   });
 
-  it('pays for the seeds', () => {
+  it('pays for the seeds, kept in the books', () => {
     const state = newTestGame();
     const planted = plant(state, 'pepper');
     expect(planted.money).toBe(state.money - crops.pepper.seedCost);
+    expect(planted.books.today.seeds).toBe(crops.pepper.seedCost);
   });
 
   it('refuses seeds the player cannot afford', () => {
@@ -124,15 +125,12 @@ describe('PlantCrop', () => {
   });
 });
 
-describe.each([
-  ['Water', 'water'],
-  ['Fertilize', 'nutrients'],
-] as const)('%s', (type, resource) => {
-  const { amount, cost, max } = defaultContent.care[resource];
+describe('Water', () => {
+  const { amount, cost, max } = defaultContent.care.water;
 
   function command(state: GameState, greenhouseId?: string): Command {
     return {
-      type,
+      type: 'Water',
       id: 'cmd-1',
       issuedAt: 0,
       greenhouseId: greenhouseId ?? firstGreenhouse(state).id,
@@ -140,23 +138,24 @@ describe.each([
   }
 
   function level(state: GameState): number {
-    return firstGreenhouse(state).climate[resource];
+    return firstGreenhouse(state).climate.water;
   }
 
-  it(`raises the greenhouse ${resource} for a small fee`, () => {
+  it('raises the greenhouse water for a small fee, kept in the books', () => {
     const state = newTestGame();
     const next = accept(state, command(state));
     expect(level(next)).toBeCloseTo(level(state) + amount, 12);
     expect(next.money).toBe(state.money - cost);
+    expect(next.books.today.water).toBe(cost);
   });
 
-  it(`never raises ${resource} above its maximum`, () => {
-    const state = withClimate(newTestGame(), { [resource]: max - amount / 2 });
+  it('never raises water above its maximum', () => {
+    const state = withClimate(newTestGame(), { water: max - amount / 2 });
     expect(level(accept(state, command(state)))).toBe(max);
   });
 
   it.each([
-    ['ALREADY_FULL', (s: GameState) => withClimate(s, { [resource]: max })],
+    ['ALREADY_FULL', (s: GameState) => withClimate(s, { water: max })],
     ['NOT_ENOUGH_MONEY', (s: GameState) => ({ ...s, money: cost - 1 })],
   ] as const)('rejects with %s', (code, edit) => {
     const state = edit(newTestGame());
@@ -272,17 +271,34 @@ describe('SellCrop', () => {
     return { type: 'SellCrop', id: 'cmd-1', issuedAt: 0, cropId, units };
   }
 
-  it("sells at today's price, for the produce's quality and freshness", () => {
+  it("sells at the crop's price, for the produce's quality and freshness", () => {
     const state = runTicks(stocked(), 10);
     const [lot] = state.storage.lots;
     if (!lot) throw new Error('expected a harvest in storage');
-    const { gameHour } = state.clock;
-    const price = cropPrice(state.market, 'cucumber', gameHour, defaultContent);
-    const quality = lotQuality(lot, gameHour, crops.cucumber);
+    const price = cropPrice('cucumber', defaultContent);
+    const quality = lotQuality(lot, state.clock.gameHour, crops.cucumber);
 
     const next = accept(state, sellCommand('cucumber', 5));
-    expect(next.money).toBe(state.money + Math.round(5 * price * quality));
+    const revenue = Math.round(5 * price * quality);
+    expect(next.money).toBe(state.money + revenue);
+    expect(next.books.today.sales).toBe(state.books.today.sales + revenue);
     expect(next.storage.lots).toEqual([{ ...lot, units: lot.units - 5 }]);
+  });
+
+  it('pays a fixed price: the same at any hour of the year', () => {
+    expect(cropPrice('cucumber', defaultContent)).toBe(crops.cucumber.price);
+    const fresh = (hour: number) =>
+      withClimate(
+        { ...newTestGame(), clock: { gameHour: hour, lastTickAt: 0 } },
+        optimalClimate('cucumber'),
+      );
+    const sold = [0, 2000, 5000].map((hour) => {
+      const state = harvest(
+        runTicks(plant(fresh(hour), 'cucumber'), 30, STILL_AIR),
+      );
+      return accept(state, sellCommand('cucumber', 5)).money - state.money;
+    });
+    expect(new Set(sold).size).toBe(1);
   });
 
   it.each([
@@ -311,7 +327,6 @@ describe('every command', () => {
     const meta = { id: 'cmd-1', issuedAt: 0 };
     expect(() => {
       accept(ready, { ...meta, type: 'Water', greenhouseId });
-      accept(ready, { ...meta, type: 'Fertilize', greenhouseId });
       accept(ready, { ...meta, type: 'HarvestCrop', greenhouseId, plotId });
       accept(stored, {
         ...meta,

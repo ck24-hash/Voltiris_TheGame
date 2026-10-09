@@ -1,4 +1,5 @@
 import type {
+  ClimateVariable,
   CropId,
   EnergyAsset,
   EquipmentKind,
@@ -20,8 +21,12 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { BuildingId } from '../iso/layout';
 import { pageLifecycle } from './lifecycle';
 
-/** Windows opened from the greenhouse and the buildings on the map, plus settings. */
-type GameWindow = BuildingId | 'greenhouse' | 'settings';
+/**
+ * Windows opened from the greenhouse and the buildings on the map, a climate
+ * badge (one per part of the climate), the money, the guide and settings.
+ */
+type GameWindow =
+  BuildingId | ClimateVariable | 'greenhouse' | 'money' | 'guide' | 'settings';
 
 /** Where the plot bubble points, in screen pixels of the game view. */
 export interface BubbleAnchor {
@@ -72,7 +77,6 @@ export interface GameStore {
     cropId: CropId,
   ) => CommandError | null;
   readonly water: (greenhouseId: string) => CommandError | null;
-  readonly fertilize: (greenhouseId: string) => CommandError | null;
   readonly harvestCrop: (
     greenhouseId: string,
     plotId: string,
@@ -110,8 +114,11 @@ export interface GameStore {
   readonly markAway: () => void;
   readonly notify: (text: string, tone?: Notice['tone']) => void;
   readonly dismissNotice: (id: number) => void;
-  /** Swaps in another game (an import or a new game) and saves it. */
-  readonly replaceGame: (game: GameState) => void;
+  /**
+   * Swaps in another game (an import or a new game) and saves it, opening
+   * `window` (the guide, for a new game).
+   */
+  readonly replaceGame: (game: GameState, window?: GameWindow | null) => void;
 }
 
 export interface GameStoreDeps {
@@ -119,6 +126,8 @@ export interface GameStoreDeps {
   readonly clock: Clock;
   readonly newId: () => string;
   readonly game: GameState;
+  /** The window open at the start: the guide, for a new game. */
+  readonly window?: GameWindow | null;
 }
 
 /** UI state around the sim. The UI only reads state and sends commands. */
@@ -165,7 +174,7 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
       content,
       game: deps.game,
       selection: null,
-      window: null,
+      window: deps.window ?? null,
       away: null,
       awayPending: true,
       notice: null,
@@ -186,9 +195,6 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
 
       water: (greenhouseId) =>
         run((meta) => ({ ...meta, type: 'Water', greenhouseId })),
-
-      fertilize: (greenhouseId) =>
-        run((meta) => ({ ...meta, type: 'Fertilize', greenhouseId })),
 
       harvestCrop: (greenhouseId, plotId) =>
         run((meta) => ({ ...meta, type: 'HarvestCrop', greenhouseId, plotId })),
@@ -263,11 +269,11 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
         if (get().notice?.id === id) set({ notice: null });
       },
 
-      replaceGame: (game) => {
+      replaceGame: (game, window = null) => {
         set({
           game,
           selection: null,
-          window: null,
+          window,
           away: null,
           checkpoint: get().checkpoint + 1,
         });

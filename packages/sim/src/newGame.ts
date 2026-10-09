@@ -1,8 +1,8 @@
 import type { GameContent } from '@voltiris/content';
+import { NEW_BOOKS } from './books';
 import type { Clock } from './clock';
 import { initialEnergy } from './energy';
 import { levelAt } from './equipment';
-import { initialMarket } from './market';
 import { createRng, seedRng } from './rng';
 import { STATE_VERSION, type GameState, type Greenhouse } from './state';
 
@@ -45,7 +45,7 @@ export function createGame(
     owed: 0,
     greenhouses: [greenhouse],
     storage: { lots: [] },
-    market: initialMarket(),
     energy: initialEnergy(),
+    books: NEW_BOOKS,
   };
 }

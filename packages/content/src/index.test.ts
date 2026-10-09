@@ -11,17 +11,8 @@ import {
   defaultContent,
 } from './index';
 
-const {
-  crops,
-  greenhouse,
-  time,
-  care,
-  storage,
-  market,
-  equipment,
-  control,
-  physics,
-} = defaultContent;
+const { crops, greenhouse, time, care, storage, equipment, control, physics } =
+  defaultContent;
 const startingPlots = greenhouse.sizes[0]?.plots ?? 0;
 
 describe('crops', () => {
@@ -43,15 +34,11 @@ describe('crops', () => {
       crop.growthHours,
       crop.yieldPerPlot,
       crop.seedCost,
-      crop.basePrice,
+      crop.price,
       crop.waterUse,
-      crop.nutrientUse,
       crop.shelfLifeDays,
     ]) {
       expect(value).toBeGreaterThan(0);
-    }
-    for (const season of SEASONS) {
-      expect(crop.seasonalPrice[season]).toBeGreaterThan(0);
     }
   });
 
@@ -265,20 +252,24 @@ describe('economy', () => {
     );
   });
 
-  it.each(['water', 'nutrients'] as const)(
-    'tops up %s in whole coins, within reach of every crop band',
-    (resource) => {
-      const topUp = care[resource];
-      expect(Number.isInteger(topUp.cost)).toBe(true);
-      expect(topUp.amount).toBeGreaterThan(0);
-      for (const id of CROP_IDS) {
-        const band = crops[id].climate[resource];
-        expect(topUp.max).toBeGreaterThan(band.optimalHigh);
-        // One top-up never jumps right over a crop's optimal band.
-        expect(topUp.amount).toBeLessThan(band.optimalHigh - band.optimalLow);
-      }
-    },
-  );
+  it('waters in whole coins, within reach of every crop band', () => {
+    const topUp = care.water;
+    expect(Number.isInteger(topUp.cost)).toBe(true);
+    expect(topUp.amount).toBeGreaterThan(0);
+    for (const id of CROP_IDS) {
+      const band = crops[id].climate.water;
+      expect(topUp.max).toBeGreaterThan(band.optimalHigh);
+      // One watering never jumps right over a crop's optimal band.
+      expect(topUp.amount).toBeLessThan(band.optimalHigh - band.optimalLow);
+    }
+  });
+
+  it('keeps a reserve for seeds that buys the cheapest ones', () => {
+    const { reserve, startingMoney } = defaultContent.economy;
+    const cheapest = Math.min(...CROP_IDS.map((id) => crops[id].seedCost));
+    expect(reserve).toBeGreaterThanOrEqual(cheapest);
+    expect(reserve).toBeLessThan(startingMoney);
+  });
 
   it('stores a full greenhouse of any crop, at the largest size', () => {
     const largest = greenhouse.sizes.at(-1)?.plots ?? 0;
@@ -287,15 +278,6 @@ describe('economy', () => {
         crops[id].yieldPerPlot * largest,
       );
     }
-  });
-
-  it('keeps market swings around 1', () => {
-    expect(market.minSwing).toBeGreaterThan(0);
-    expect(market.minSwing).toBeLessThan(1);
-    expect(market.maxSwing).toBeGreaterThan(1);
-    expect(market.reversion).toBeGreaterThan(0);
-    expect(market.reversion).toBeLessThan(1);
-    expect(market.volatility).toBeGreaterThan(0);
   });
 });
 

@@ -64,23 +64,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tag {
-  flex-basis: 100%;
-  padding: 0 6px;
-  border-radius: 8px;
-  color: #fff;
-  font-size: 11px;
-  text-align: center;
-}
-
-.up {
-  background: var(--good);
-}
-
-.down {
-  background: var(--warn);
-}
-
 .action {
   flex: none;
   min-width: 96px;

@@ -167,7 +167,7 @@ function RestartPanel({ onCancel }: { onCancel: () => void }) {
           tone="red"
           small
           onClick={() => {
-            replaceGame(newGame());
+            replaceGame(newGame(), 'guide');
             notify('New game started');
           }}
         >

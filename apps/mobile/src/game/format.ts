@@ -51,6 +51,18 @@ export function formatClimate(
   return unit === '%' ? `${number}%` : `${number} ${unit}`;
 }
 
+/** A climate range without needless decimals: "22–28 °C", "600–1000 ppm". */
+export function formatClimateRange(
+  variable: ClimateVariable,
+  low: number,
+  high: number,
+): string {
+  const { unit, decimals } = GAUGES[variable];
+  const number = (value: number) => String(Number(value.toFixed(decimals)));
+  const range = `${number(low)}–${number(high)}`;
+  return unit === '%' ? `${range}%` : `${range} ${unit}`;
+}
+
 /** In-game duration: "5 d 3 h", "7 h". */
 export function formatGameHours(hours: number): string {
   if (!Number.isFinite(hours)) return 'never';

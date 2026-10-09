@@ -1,9 +1,7 @@
 import { defaultContent, type GameContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
+import { runningCosts } from './books';
 import {
-  afterHour,
-  dayTotal,
-  EMPTY_DAY,
   hourPrices,
   initialEnergy,
   NO_DEMAND,
@@ -11,16 +9,19 @@ import {
   sunshine,
   tariffBand,
   type EnergyDemand,
+  type EnergyHour,
 } from './energy';
-import type { Energy, EnergyDay, GameState } from './state';
+import type { DayBooks, Energy, GameState } from './state';
 import {
   accept,
   equipped,
   firstGreenhouse,
   newTestGame,
+  plant,
   runTicks,
   withEnergy,
 } from './test-utils';
+import { planHour, tick } from './tick';
 import { HOURS_PER_DAY } from './time';
 
 const content = defaultContent;
@@ -29,21 +30,47 @@ const NOON = 12;
 const NIGHT = 2;
 const PEAK = 18;
 
-/** Runs a game from midnight through one whole day; its energy totals. */
-function oneDay(state: GameState): EnergyDay {
+/** Runs a game from midnight through one whole day; its books. */
+function oneDay(state: GameState): DayBooks {
   expect(state.clock.gameHour % HOURS_PER_DAY).toBe(0);
-  const day = runTicks(state, HOURS_PER_DAY).energy.yesterday;
+  const day = runTicks(state, HOURS_PER_DAY).books.yesterday;
   if (!day) throw new Error('expected a finished day');
   return day;
+}
+
+/** Each hour of the energy system through one day. */
+function energyHours(state: GameState): EnergyHour[] {
+  const hours: EnergyHour[] = [];
+  let next = state;
+  for (let k = 0; k < HOURS_PER_DAY; k++) {
+    hours.push(planHour(next, content).energy);
+    next = tick(next, content);
+  }
+  return hours;
+}
+
+/** Power bought, less power sold. */
+function powerBill(day: DayBooks): number {
+  return day.power - day.powerSold;
+}
+
+function energyBill(day: DayBooks): number {
+  return powerBill(day) + day.fuel + day.co2;
+}
+
+/** A pepper growing, so the equipment works (it rests while nothing grows). */
+function growing(state: GameState): GameState {
+  return plant(state, 'pepper');
 }
 
 // Phase 7 "Done when": a player can cut their power bill by adding solar and
 // a battery, and a CHP unit lowers heating and CO₂ costs.
 describe('the power bill', () => {
   // LED lights and a heat pump: about 2 kW, day and night.
-  const electric = equipped(
-    ['lights', 'lights', 'heater', 'heater', 'heater'],
-    { light: 700 },
+  const electric = growing(
+    equipped(['lights', 'lights', 'heater', 'heater', 'heater'], {
+      light: 700,
+    }),
   );
 
   // The second day, once the battery has settled into its daily round.
@@ -57,19 +84,19 @@ describe('the power bill', () => {
       withEnergy(electric, { solar: 2, battery: 1 }),
     );
 
-    expect(gridOnly.power).toBeGreaterThan(0);
-    expect(withSolar.solar).toBeGreaterThan(0);
-    expect(withSolar.power).toBeLessThan(gridOnly.power * 0.8);
+    expect(powerBill(gridOnly)).toBeGreaterThan(0);
+    expect(withSolar.solarKwh).toBeGreaterThan(0);
+    expect(powerBill(withSolar)).toBeLessThan(powerBill(gridOnly) * 0.8);
     // The battery keeps midday's spare solar for the dear evening, instead
     // of selling it at half price.
-    expect(withBattery.sold).toBeLessThan(withSolar.sold);
-    expect(withBattery.power).toBeLessThan(withSolar.power);
+    expect(withBattery.soldKwh).toBeLessThan(withSolar.soldKwh);
+    expect(powerBill(withBattery)).toBeLessThan(powerBill(withSolar));
   });
 
   it('goes down with a battery alone, filled at night for the evening peak', () => {
     const gridOnly = secondDay(electric);
     const withBattery = secondDay(withEnergy(electric, { battery: 1 }));
-    expect(withBattery.power).toBeLessThan(gridOnly.power);
+    expect(powerBill(withBattery)).toBeLessThan(powerBill(gridOnly));
   });
 
   describe('with a CHP unit', () => {
@@ -85,16 +112,20 @@ describe('the power bill', () => {
           upgrade: 'size',
         });
       }
-      return state;
+      return growing(state);
     })();
 
     it('pays less for heating and CO₂, and less overall', () => {
+      const heating = (state: GameState) =>
+        energyHours(state).reduce((sum, h) => sum + h.costs.heating, 0);
       const without = oneDay(big);
       const withChp = oneDay(withEnergy(big, { chp: 1 }));
-      expect(withChp.chp).toBeGreaterThan(0);
-      expect(withChp.heating).toBeLessThan(without.heating * 0.5);
+      expect(withChp.chpKwh).toBeGreaterThan(0);
+      expect(heating(withEnergy(big, { chp: 1 }))).toBeLessThan(
+        heating(big) * 0.5,
+      );
       expect(withChp.co2).toBeLessThan(without.co2);
-      expect(dayTotal(withChp)).toBeLessThan(dayTotal(without));
+      expect(energyBill(withChp)).toBeLessThan(energyBill(without));
     });
   });
 });
@@ -176,7 +207,9 @@ describe('runEnergy', () => {
     expect(hour.solar).toBeCloseTo(made, 12);
     expect(hour.bought).toBe(0);
     expect(hour.sold).toBeCloseTo(made - 1, 12);
-    expect(hour.costs.power).toBeCloseTo(-(made - 1) * hour.prices.sell, 12);
+    expect(hour.costs.power).toBe(0);
+    expect(hour.costs.powerSold).toBeCloseTo((made - 1) * hour.prices.sell, 12);
+    expect(hour.total).toBeCloseTo(-(made - 1) * hour.prices.sell, 12);
     // No sun at night.
     expect(run(panels, demand(1), NIGHT)).toMatchObject({
       solar: 0,
@@ -294,36 +327,23 @@ describe('runEnergy', () => {
   });
 });
 
-describe('the day totals', () => {
-  it('add up every hour, and start again at midnight', () => {
-    const hour = runEnergy(
-      initialEnergy(),
-      { ...NO_DEMAND, power: 2 },
-      22,
-      content,
+describe('the books', () => {
+  it('keep the energy as the game runs, and the bill is paid', () => {
+    const state = growing(
+      withEnergy(equipped(['lights'], { light: 600 }), { solar: 1 }),
     );
-    const at22 = afterHour(initialEnergy(), hour, 22);
-    expect(at22.today.bought).toBe(2);
-    expect(at22.yesterday).toBeNull();
-
-    const at23 = afterHour(at22, hour, 23);
-    expect(at23.today).toEqual(EMPTY_DAY);
-    expect(at23.yesterday?.bought).toBe(4);
-    expect(at23.yesterday?.power).toBeCloseTo(2 * hour.costs.power, 12);
-  });
-
-  it('are kept by the game as it runs, and the bill is paid', () => {
-    const state = withEnergy(equipped(['lights'], { light: 600 }), {
-      solar: 1,
-    });
     const day = oneDay(state);
     const after = runTicks(state, HOURS_PER_DAY);
-    expect(day.solar).toBeGreaterThan(0);
-    expect(day.bought).toBeGreaterThan(0);
-    // Money paid for the day: the energy bill (no supplies here), whole
-    // coins, with the fraction still owed.
+    const hours = energyHours(state);
+    expect(day.solarKwh).toBeCloseTo(
+      hours.reduce((sum, h) => sum + h.solar, 0),
+      9,
+    );
+    expect(day.boughtKwh).toBeGreaterThan(0);
+    // Money paid for the day: the running costs less the power sold, in
+    // whole coins, with the fraction still owed.
     expect(state.money - after.money + after.owed).toBeCloseTo(
-      dayTotal(day),
+      runningCosts(day) - day.powerSold,
       9,
     );
   });
@@ -331,7 +351,8 @@ describe('the day totals', () => {
   it('pay the player for spare solar power', () => {
     const sunny = withEnergy(newTestGame(), { solar: 3 });
     const after = runTicks(sunny, HOURS_PER_DAY);
-    expect(after.energy.yesterday?.sold).toBeGreaterThan(0);
+    expect(after.books.yesterday?.soldKwh).toBeGreaterThan(0);
+    expect(after.books.yesterday?.powerSold).toBeGreaterThan(0);
     expect(after.money).toBeGreaterThan(sunny.money);
   });
 });

@@ -2,6 +2,7 @@
 
 export const SIM_VERSION = '0.1.0';
 
+export * from './books';
 export * from './catchUp';
 export * from './climate';
 export * from './clock';

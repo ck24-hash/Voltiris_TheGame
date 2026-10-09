@@ -1,5 +1,6 @@
-import { CROP_IDS, defaultContent } from '@voltiris/content';
+import { defaultContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
+import { NEW_BOOKS } from './books';
 import { createManualClock } from './clock';
 import { initialEnergy } from './energy';
 import { createGame } from './newGame';
@@ -22,7 +23,7 @@ import { ticksDue } from './time';
 const MS_PER_TICK = defaultContent.time.realMsPerTick;
 
 describe('createGame', () => {
-  it('starts a game with one empty greenhouse, empty storage and a calm market', () => {
+  it('starts a game with one empty greenhouse, empty storage and fresh books', () => {
     const clock = createManualClock(1_700_000_000_000);
     const state = createGame(
       { playerId: TEST_PLAYER_ID, seed: 42 },
@@ -33,7 +34,7 @@ describe('createGame', () => {
 
     expect(state.version).toBe(STATE_VERSION);
     expect(state.storage).toEqual({ lots: [] });
-    expect(Object.values(state.market.swings)).toEqual(CROP_IDS.map(() => 1));
+    expect(state.books).toEqual(NEW_BOOKS);
     expect(state.playerId).toBe(TEST_PLAYER_ID);
     expect(state.clock).toEqual({ gameHour: 0, lastTickAt: clock.now() });
     expect(state.money).toBe(economy.startingMoney);
@@ -109,12 +110,9 @@ describe('tick', () => {
     expect(() => tick(state, defaultContent)).not.toThrow();
   });
 
-  it('moves market prices every tick, with the seeded rng', () => {
-    const state = newTestGame();
-    const next = tick(state, defaultContent);
-    expect(next.market).not.toEqual(state.market);
-    expect(next.rng).not.toEqual(state.rng);
-    expect(tick(state, defaultContent)).toEqual(next);
+  it('gives the same hour for the same state', () => {
+    const state = plant(newTestGame(), 'tomato');
+    expect(tick(state, defaultContent)).toEqual(tick(state, defaultContent));
   });
 
   it('throws away spoiled harvests in storage', () => {
@@ -132,13 +130,13 @@ describe('tick', () => {
   });
 });
 
-describe('water and nutrients', () => {
+describe('water', () => {
   const { cucumber } = defaultContent.crops;
   const climate = (state: GameState) => firstGreenhouse(state).climate;
   const run = (state: GameState, ticks: number) =>
     runTicks(state, ticks, STILL_AIR);
 
-  it('are used up by growing crops, in proportion to their growth', () => {
+  it('is used up by growing crops, in proportion to their growth', () => {
     const start = plant(
       plant(withClimate(newTestGame(), optimalClimate('cucumber')), 'cucumber'),
       'cucumber',
@@ -150,13 +148,9 @@ describe('water and nutrients', () => {
       climate(start).water - 2 * 10 * cucumber.waterUse,
       10,
     );
-    expect(climate(after).nutrients).toBeCloseTo(
-      climate(start).nutrients - 2 * 10 * cucumber.nutrientUse,
-      10,
-    );
   });
 
-  it('are not used by a crop that has stopped growing, or one that is ready', () => {
+  it('is not used by a crop that has stopped growing, or one that is ready', () => {
     const frozen = { ...optimalClimate('tomato'), temperature: 10 };
     const stalled = plant(withClimate(newTestGame(), frozen), 'tomato');
     expect(climate(run(stalled, 50))).toEqual(frozen);

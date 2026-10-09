@@ -19,14 +19,15 @@ import {
   formatShortDuration,
 } from '../game/format';
 import { GAUGES, readGauge } from '../game/gauges';
-import { CARE, CROP_ICONS } from '../game/selectors';
-import { CareButton } from './CareButton';
+import { CROP_ICONS } from '../game/selectors';
+import { CLIMATE_INFO } from './climateInfo';
 import { cx } from './cx';
 import { GameButton } from './GameButton';
 import { ClimateIcon, ClockIcon } from './icons';
 import { BUBBLE_WIDTH, placeBubble } from './placeBubble';
 import styles from './PlotBubble.module.css';
 import { VolticoinIcon } from './VolticoinIcon';
+import { WaterButton } from './WaterButton';
 
 type ShowError = (error: CommandError | null) => void;
 
@@ -211,12 +212,10 @@ function Growing({
     variable,
     reading: readGauge(variable, climate[variable], [crop]),
   })).filter(({ reading }) => reading.status !== 'good');
-  // Too little water or nutrients: a top-up right here helps.
-  const needs = CARE.filter((resource) =>
-    issues.some(
-      ({ variable, reading }) =>
-        variable === resource && reading.note === GAUGES[resource].low,
-    ),
+  // Thirsty: watering right here helps.
+  const thirsty = issues.some(
+    ({ variable, reading }) =>
+      variable === 'water' && reading.note === GAUGES.water.low,
   );
 
   return (
@@ -271,21 +270,19 @@ function Growing({
                   {GAUGES[variable].short}
                 </span>
                 <strong>{reading.note}</strong>
+                <span className={styles.fix}>
+                  {reading.note === GAUGES[variable].low
+                    ? CLIMATE_INFO[variable].fixLow
+                    : CLIMATE_INFO[variable].fixHigh}
+                </span>
               </li>
             ))}
           </ul>
         </div>
       )}
-      {needs.length > 0 && (
+      {thirsty && (
         <div className={styles.care}>
-          {needs.map((resource) => (
-            <CareButton
-              key={resource}
-              resource={resource}
-              greenhouseId={greenhouse.id}
-              onDone={onError}
-            />
-          ))}
+          <WaterButton greenhouseId={greenhouse.id} onDone={onError} />
         </div>
       )}
     </>

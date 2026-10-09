@@ -53,14 +53,6 @@ export const GAUGES: Record<ClimateVariable, GaugeDef> = {
     low: 'Thirsty',
     high: 'Waterlogged',
   },
-  nutrients: {
-    label: 'Nutrients',
-    short: 'Nutrients',
-    unit: 'EC',
-    decimals: 1,
-    low: 'Hungry',
-    high: 'Too salty',
-  },
 };
 
 /** idle: nothing growing. good: optimal for every crop. warn: slows growth. bad: stops growth. */
@@ -98,4 +90,30 @@ export function readGauge(
     status: worst.factor === 0 ? 'bad' : 'warn',
     note: tooLow ? gauge.low : gauge.high,
   };
+}
+
+/** The ideal band for the crops growing, as the gauges show it. */
+export interface IdealRange {
+  readonly low: number;
+  readonly high: number;
+  /**
+   * False when the crops want different things: then the range is the
+   * middle ground between their bands, ideal for none of them.
+   */
+  readonly shared: boolean;
+}
+
+/** Where every growing crop is happy; null when nothing grows. */
+export function idealRange(
+  variable: ClimateVariable,
+  growingCrops: readonly CropDef[],
+): IdealRange | null {
+  if (growingCrops.length === 0) return null;
+  const lows = growingCrops.map((c) => c.climate[variable].optimalLow);
+  const highs = growingCrops.map((c) => c.climate[variable].optimalHigh);
+  const low = Math.max(...lows);
+  const high = Math.min(...highs);
+  return low <= high
+    ? { low, high, shared: true }
+    : { low: high, high: low, shared: false };
 }

@@ -1,15 +1,22 @@
 // Phase 5 "Done when": the first loop (plant, harvest, sell) is quick and
 // pays, and the crops' timings and earnings follow the design.
 
-import { CROP_IDS, defaultContent, type CropId } from '@voltiris/content';
+import {
+  CROP_IDS,
+  defaultContent,
+  EQUIPMENT_KINDS,
+  type CropId,
+} from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { createManualClock } from './clock';
 import { applyCommand, type Command } from './commands';
-import { cropPrice, initialMarket } from './market';
+import { cropPrice } from './market';
 import { createGame } from './newGame';
 import type { GameState } from './state';
 import { stockOf } from './storage';
 import {
+  accept,
+  equipped,
   firstGreenhouse,
   growCrop,
   newTestGame,
@@ -32,15 +39,15 @@ const TARGET_MINUTES: Record<CropId, number> = {
 
 /**
  * A starting greenhouse full of one crop, with no equipment: how long the
- * crop takes and what one plot earns at the opening prices, after seeds and
- * its share of the water and nutrients.
+ * crop takes and what one plot earns, after seeds and its share of the
+ * watering.
  */
 function economics(id: CropId) {
   const crop = crops[id];
   const start = newTestGame();
   const plots = firstGreenhouse(start).plots.length;
   const { ticks, quality, careCost } = growCrop(start, id);
-  const price = cropPrice(initialMarket(), id, 0, content);
+  const price = cropPrice(id, content);
   const profit =
     crop.yieldPerPlot * price * quality - crop.seedCost - careCost / plots;
   const minutes = (ticks * time.realMsPerTick) / MINUTE;
@@ -55,10 +62,54 @@ describe('crop timings in the starting greenhouse', () => {
   });
 });
 
+/**
+ * Real-time earnings per hour of a greenhouse full of one crop, after seeds,
+ * watering and running costs: bare, or with every piece of equipment and the
+ * climate computer on auto.
+ */
+function earningsPerHour(id: CropId, fitted: boolean): number {
+  let start = newTestGame();
+  if (fitted) {
+    start = equipped(EQUIPMENT_KINDS);
+    start = accept(start, {
+      type: 'UpgradeGreenhouse',
+      id: 'cmd-computer',
+      issuedAt: 0,
+      greenhouseId: firstGreenhouse(start).id,
+      upgrade: 'computer',
+    });
+  }
+  const { state, ticks, quality } = growCrop(start, id);
+  const crop = crops[id];
+  const plots = firstGreenhouse(start).plots.length;
+  const sales = plots * crop.yieldPerPlot * cropPrice(id, content) * quality;
+  // Seeds, watering and running costs all came out of the money.
+  const profit = sales - (start.money - state.money + state.owed);
+  return (profit / ((ticks * time.realMsPerTick) / MINUTE)) * 60;
+}
+
 describe('crop earnings', () => {
   it.each(CROP_IDS)('%s earns a profit from the very first planting', (id) => {
     expect(economics(id).profit).toBeGreaterThan(0);
   });
+
+  it.each(CROP_IDS)('%s sells for at least 3 times its seeds', (id) => {
+    const { yieldPerPlot, seedCost } = crops[id];
+    const { quality } = growCrop(newTestGame(), id);
+    expect(yieldPerPlot * cropPrice(id, content) * quality).toBeGreaterThan(
+      3 * seedCost,
+    );
+  });
+
+  // Microgreens already grow at full speed and quality without equipment.
+  it.each(['cucumber', 'strawberry', 'tomato', 'pepper'] as const)(
+    'equipment pays its way: %s earns more per hour, running costs and all',
+    (id) => {
+      expect(earningsPerHour(id, true)).toBeGreaterThan(
+        earningsPerHour(id, false) * 1.15,
+      );
+    },
+  );
 
   it('pays more per harvest for slower crops, but less per hour', () => {
     const all = CROP_IDS.map((id) => economics(id));
@@ -76,7 +127,7 @@ type WithoutMeta<C> = C extends Command ? Omit<C, 'id' | 'issuedAt'> : never;
 /**
  * A new player plays for 10 minutes: plants every plot with one crop, then
  * checks in every 15 seconds, harvests what is ready, sells it all and
- * plants again, and waters or feeds when the gauge says the plants need it.
+ * plants again, and waters when the gauge says the plants need it.
  */
 function playTenMinutes(cropId: CropId) {
   const clock = createManualClock(0);
@@ -109,11 +160,9 @@ function playTenMinutes(cropId: CropId) {
     }
     const units = stockOf(state.storage, cropId);
     if (units > 0 && run({ type: 'SellCrop', cropId, units })) sales++;
-    const { water, nutrients } = firstGreenhouse(state).climate;
-    const bands = crops[cropId].climate;
-    if (water < bands.water.optimalLow) run({ type: 'Water', greenhouseId });
-    if (nutrients < bands.nutrients.optimalLow) {
-      run({ type: 'Fertilize', greenhouseId });
+    const { water } = firstGreenhouse(state).climate;
+    if (water < crops[cropId].climate.water.optimalLow) {
+      run({ type: 'Water', greenhouseId });
     }
   }
   return { state, harvests, sales };

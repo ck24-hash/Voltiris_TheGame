@@ -80,6 +80,11 @@
   border-radius: 19px;
   background: var(--hud);
   box-shadow: var(--drop);
+  pointer-events: auto;
+}
+
+.coins:active {
+  transform: translateY(2px);
 }
 
 .coinIcon {
@@ -112,4 +117,12 @@
 
 .gear:active {
   transform: translateY(2px);
+}
+
+.help {
+  background: linear-gradient(to bottom, var(--blue-light), var(--blue));
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 1.5px 0 rgb(0 0 0 / 30%);
 }

@@ -52,8 +52,8 @@ export function drawEquipmentBack(
 
   if (levels.vents >= 2) drawFan(g, layout, look.ventOpening > 0);
   if (levels.heater === 2) drawPipes(g, layout, look.heating);
-  if (levels.fertigation > 0)
-    drawTanks(g, spot('fertigation'), levels.fertigation);
+  if (levels.irrigation > 0)
+    drawTanks(g, spot('irrigation'), levels.irrigation);
   if (levels.heater > 0)
     drawHeater(g, spot('heater'), levels.heater, look.heating);
   if (levels.co2 > 0) drawCo2(g, spot('co2'), levels.co2, look.dosing);
@@ -160,13 +160,13 @@ function drawFan(g: Graphics, layout: SceneLayout, spinning: boolean): void {
   if (spinning) g.circle(x, y, 12).stroke({ color: 0xffffff, width: 2 });
 }
 
-/** Water and feed tanks for fertigation. */
+/** Water tanks for irrigation; recirculating adds a return tank. */
 function drawTanks(g: Graphics, p: Point, level: number): void {
   const { x, y } = p;
   shadow(g, p, 26);
   if (level >= 2) {
     g.roundRect(x + 4, y - 34, 18, 34, 7)
-      .fill(COLORS.feedTank)
+      .fill(COLORS.returnTank)
       .stroke(INK);
   }
   g.roundRect(x - 14, y - 46, 26, 46, 9)

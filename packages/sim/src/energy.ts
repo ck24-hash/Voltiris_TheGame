@@ -4,8 +4,9 @@ import type {
   GameContent,
   TariffBand,
 } from '@voltiris/content';
+import type { BookEntry } from './books';
 import { levelAt } from './equipment';
-import type { Energy, EnergyDay } from './state';
+import type { Energy } from './state';
 import { HOURS_PER_DAY, seasonalValue } from './time';
 
 // The power supply, one hour at a time: own generation (solar, CHP) first,
@@ -92,8 +93,10 @@ export const NO_DEMAND: EnergyDemand = { power: 0, heat: [], co2: [] };
 
 /** Volticoins the energy cost in an hour. */
 export interface EnergyCosts {
-  /** The grid: bought less sold. */
+  /** Power bought from the grid. */
   readonly power: number;
+  /** Spare power sold to the grid: money in, so it lowers the total. */
+  readonly powerSold: number;
   /** Gas the greenhouse heaters burned. */
   readonly heating: number;
   /** CO₂ bought for the injectors. */
@@ -247,7 +250,8 @@ function supplyHour({
   const sold = spare;
 
   const costs: EnergyCosts = {
-    power: bought * prices.buy - sold * prices.sell,
+    power: bought * prices.buy,
+    powerSold: sold * prices.sell,
     heating: heatingGas * prices.gas,
     co2: co2Cost,
     chpFuel: chp
@@ -267,65 +271,30 @@ function supplyHour({
     sold,
     stored,
     costs,
-    total: costs.power + costs.heating + costs.co2 + costs.chpFuel,
+    total:
+      costs.power - costs.powerSold + costs.heating + costs.co2 + costs.chpFuel,
   };
 }
 
-export const EMPTY_DAY: EnergyDay = {
-  solar: 0,
-  chp: 0,
-  bought: 0,
-  sold: 0,
-  power: 0,
-  heating: 0,
-  co2: 0,
-  chpFuel: 0,
-};
-
-/** Adds an hour to the day's totals. */
-export function addHour(day: EnergyDay, hour: EnergyHour): EnergyDay {
-  return {
-    solar: day.solar + hour.solar,
-    chp: day.chp + hour.chp,
-    bought: day.bought + hour.bought,
-    sold: day.sold + hour.sold,
-    power: day.power + hour.costs.power,
-    heating: day.heating + hour.costs.heating,
-    co2: day.co2 + hour.costs.co2,
-    chpFuel: day.chpFuel + hour.costs.chpFuel,
-  };
+/** The energy system after an hour: the battery's new charge. */
+export function afterHour(energy: Energy, hour: EnergyHour): Energy {
+  return { ...energy, stored: hour.stored };
 }
 
-export function dayTotal(day: EnergyDay): number {
-  return day.power + day.heating + day.co2 + day.chpFuel;
-}
-
-/**
- * The energy system after the hour that started at `gameHour`: the battery's
- * new charge, and the day's totals (at midnight, today becomes yesterday).
- */
-export function afterHour(
-  energy: Energy,
-  hour: EnergyHour,
-  gameHour: number,
-): Energy {
-  const today = addHour(energy.today, hour);
-  const dayDone = (gameHour + 1) % HOURS_PER_DAY === 0;
+/** What an hour of the energy system adds to the books. */
+export function energyEntry(hour: EnergyHour): BookEntry {
   return {
-    ...energy,
-    stored: hour.stored,
-    today: dayDone ? EMPTY_DAY : today,
-    yesterday: dayDone ? today : energy.yesterday,
+    power: hour.costs.power,
+    powerSold: hour.costs.powerSold,
+    fuel: hour.costs.heating + hour.costs.chpFuel,
+    co2: hour.costs.co2,
+    solarKwh: hour.solar,
+    chpKwh: hour.chp,
+    boughtKwh: hour.bought,
+    soldKwh: hour.sold,
   };
 }
 
 export function initialEnergy(): Energy {
-  return {
-    solar: 0,
-    battery: 0,
-    chp: 0,
-    stored: 0,
-    today: EMPTY_DAY,
-    yesterday: null,
-  };
+  return { solar: 0, battery: 0, chp: 0, stored: 0 };
 }

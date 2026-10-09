@@ -15,15 +15,15 @@ interface EquipmentInfo {
 export const EQUIPMENT_INFO: Record<EquipmentKind, EquipmentInfo> = {
   heater: { name: 'Heater', does: 'Warms the air when it is too cold.' },
   vents: { name: 'Vents', does: 'Let out heat and damp air.' },
-  fogger: { name: 'Fogger', does: 'Mists dry air, and cools it a little.' },
+  fogger: { name: 'Fogger', does: 'Mists dry air to make it humid.' },
   co2: { name: 'CO₂ injector', does: 'Feeds the plants CO₂ to grow faster.' },
   lights: {
     name: 'Grow lights',
     does: 'Add light when the sun is not enough.',
   },
-  fertigation: {
-    name: 'Fertigation',
-    does: 'Waters and feeds the plants by itself.',
+  irrigation: {
+    name: 'Irrigation',
+    does: 'Waters the plants by itself.',
   },
 };
 
@@ -42,8 +42,8 @@ export function deviceStatus(kind: EquipmentKind, load: number): string {
       return working ? `Adding CO₂ · ${share}` : 'Idle: enough CO₂';
     case 'lights':
       return working ? `On · ${share}` : 'Off: bright enough';
-    case 'fertigation':
-      return working ? 'Topping up' : 'Idle: watered and fed';
+    case 'irrigation':
+      return working ? 'Watering' : 'Idle: watered';
   }
 }
 
@@ -76,5 +76,4 @@ export const SETPOINT_INFO: Record<SetpointId, SetpointInfo> = {
   co2: { label: 'Keep CO₂ at', variable: 'co2' },
   light: { label: 'Light up to', variable: 'light' },
   water: { label: 'Water up to', variable: 'water' },
-  nutrients: { label: 'Feed up to', variable: 'nutrients' },
 };

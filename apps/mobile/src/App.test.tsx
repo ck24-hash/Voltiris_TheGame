@@ -1,5 +1,10 @@
 import { defaultContent } from '@voltiris/content';
-import { cropPrice, STATE_VERSION, type GameState } from '@voltiris/sim';
+import {
+  cropPrice,
+  hourPrices,
+  STATE_VERSION,
+  type GameState,
+} from '@voltiris/sim';
 import {
   act,
   cleanup,
@@ -62,7 +67,7 @@ function renderApp() {
 }
 
 function badge(name: string) {
-  return screen.getByRole('group', { name });
+  return screen.getByRole('button', { name: new RegExp(`^${name}:`) });
 }
 
 function withWater(game: GameState, water: number): GameState {
@@ -95,17 +100,72 @@ describe('HUD', () => {
     expect(screen.getByText('Spring · Year 1')).toBeDefined();
   });
 
-  it('shows the six climate readings, idle while nothing grows', () => {
+  it('shows the five climate readings, idle while nothing grows', () => {
     renderApp();
     expect(within(badge('Temperature')).getByText('20.0 °C')).toBeDefined();
     expect(within(badge('Humidity')).getByText('60%')).toBeDefined();
     expect(within(badge('CO₂')).getByText('420 ppm')).toBeDefined();
     expect(within(badge('Light')).getByText('400 PAR')).toBeDefined();
     expect(within(badge('Water')).getByText('65%')).toBeDefined();
-    expect(within(badge('Nutrients')).getByText('2.5 EC')).toBeDefined();
-    const badges = screen.getAllByRole('group');
-    expect(badges).toHaveLength(6);
+    const badges = screen.getAllByRole('button', {
+      name: /^(Temperature|Humidity|CO₂|Light|Water):/,
+    });
+    expect(badges).toHaveLength(5);
     for (const b of badges) expect(b).toHaveAttribute('data-status', 'idle');
+  });
+
+  it('explains a climate badge: what the crops want, and what helps', async () => {
+    const user = userEvent.setup();
+    const { store } = renderApp();
+    const greenhouse = firstGreenhouseOf(store);
+    act(() => {
+      store
+        .getState()
+        .plantCrop(greenhouse.id, greenhouse.plots[0]?.id ?? '', 'cucumber');
+    });
+    await user.click(badge('Temperature'));
+    const window = screen.getByRole('dialog', { name: 'Temperature' });
+    expect(window).toHaveTextContent('Too cold');
+    expect(window).toHaveTextContent('Ideal for Cucumber: 22–28 °C');
+    expect(window).toHaveTextContent('Warmth sets how fast plants grow');
+    expect(window).toHaveTextContent('No Heater or Vents yet');
+  });
+
+  it('shows where the money goes from the coins', async () => {
+    const user = userEvent.setup();
+    const { store, runTicks } = renderApp();
+    const greenhouse = firstGreenhouseOf(store);
+    act(() => {
+      store.getState().buyEquipment(greenhouse.id, 'heater');
+      store
+        .getState()
+        .plantCrop(greenhouse.id, greenhouse.plots[0]?.id ?? '', 'pepper');
+    });
+    await user.click(screen.getByRole('button', { name: '320 Volticoins' }));
+    const window = screen.getByRole('dialog', { name: 'Money' });
+    expect(window).toHaveTextContent('Running the greenhouse costs');
+    const row = (name: string) =>
+      within(window).getByRole('row', { name: new RegExp(`^${name}`) });
+    expect(row('Seeds')).toHaveTextContent('30.0');
+    expect(row('Equipment and building')).toHaveTextContent('150.0');
+    expect(row('Profit')).toHaveTextContent('−180.0');
+    expect(row('Seeds')).toHaveTextContent('–');
+
+    runTicks(24);
+    expect(row('Gas')).not.toHaveTextContent('–');
+    expect(store.getState().game.books.yesterday?.fuel).toBeGreaterThan(0);
+  });
+
+  it('opens the guide from the help button', async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole('button', { name: 'How to play' }));
+    const window = screen.getByRole('dialog', { name: 'How to play' });
+    expect(window).toHaveTextContent('Microgreens are ready in 2 minutes');
+    await user.click(
+      within(window).getByRole('button', { name: 'Let’s grow!' }),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('updates live as the simulation ticks', () => {
@@ -271,7 +331,7 @@ describe('buildings', () => {
     ).toBeDisabled();
 
     const game = store.getState().game;
-    const price = cropPrice(game.market, 'strawberry', 0, defaultContent);
+    const price = cropPrice('strawberry', defaultContent);
     expect(within(window).getByLabelText('Strawberry price')).toHaveTextContent(
       price.toFixed(2),
     );
@@ -337,7 +397,7 @@ describe('greenhouse', () => {
     };
   }
 
-  it('buys a heater that warms the air', async () => {
+  it('buys a heater that warms the air while a crop grows', async () => {
     const user = userEvent.setup();
     const { store, runTicks } = renderApp();
     runTicks(0);
@@ -359,6 +419,15 @@ describe('greenhouse', () => {
       'Gas heater installed',
     );
     expect(within(window).getByText('Gas heater · Level 1 of 3')).toBeDefined();
+    // Nothing grows yet: the heater rests.
+    expect(window).toHaveTextContent('Resting: nothing is growing');
+
+    const greenhouse = firstGreenhouseOf(store);
+    act(() => {
+      store
+        .getState()
+        .plantCrop(greenhouse.id, greenhouse.plots[0]?.id ?? '', 'tomato');
+    });
     // Heating the 20 °C greenhouse to its 23 °C target takes three quarters
     // of its output.
     expect(within(window).getByText(/Heating · 75%/)).toBeDefined();
@@ -369,26 +438,44 @@ describe('greenhouse', () => {
     expect(within(badge('Temperature')).getByText('23.0 °C')).toBeDefined();
   });
 
-  it('sets the targets the equipment works to', async () => {
+  it('sets the targets the equipment works to, beside the ideal range', async () => {
     const user = userEvent.setup();
     const { store } = renderApp();
-    const { id } = firstGreenhouseOf(store);
+    const { id, plots } = firstGreenhouseOf(store);
     act(() => {
       store.getState().buyEquipment(id, 'heater');
     });
     const window = openGreenhouse(store);
     await user.click(within(window).getByRole('tab', { name: 'Climate' }));
+    const temperature = within(window).getByRole('region', {
+      name: 'Temperature',
+    });
+    expect(temperature).toHaveTextContent('Plant a crop to see what it likes.');
 
+    act(() => {
+      store.getState().plantCrop(id, plots[0]?.id ?? '', 'cucumber');
+    });
+    expect(temperature).toHaveTextContent('Ideal for Cucumber: 22–28 °C');
     const heatTo = within(window).getByRole('group', { name: 'Heat up to' });
     expect(within(heatTo).getByText('23.0 °C')).toBeDefined();
-    expect(within(heatTo).getByText('Now 20.0 °C')).toBeDefined();
+    expect(within(heatTo).getByText('Heater · Heating · 75%')).toBeDefined();
     await user.click(within(heatTo).getByRole('button', { name: 'Raise' }));
     expect(within(heatTo).getByText('24.0 °C')).toBeDefined();
     expect(firstGreenhouseOf(store).setpoints.heatTo).toBe(24);
+
+    // A target outside the ideal range is flagged.
+    for (let k = 0; k < 3; k++) {
+      await user.click(within(heatTo).getByRole('button', { name: 'Lower' }));
+    }
+    expect(within(heatTo).getByText('Not ideal')).toBeDefined();
+
     // Only the equipment that is installed has targets here.
     expect(
       within(window).queryByRole('group', { name: 'Keep CO₂ at' }),
     ).toBeNull();
+    expect(
+      within(window).getByRole('region', { name: 'CO₂' }),
+    ).toHaveTextContent('No CO₂ injector yet');
   });
 
   it('lets the climate computer set the targets, or the player', async () => {
@@ -496,8 +583,12 @@ describe('greenhouse', () => {
     ).toBeNull();
   });
 
-  it('says when the equipment is off for want of money', () => {
+  it('says when the equipment is off, keeping the Volticoins for seeds', () => {
     const { store } = renderApp();
+    const { id, plots } = firstGreenhouseOf(store);
+    act(() => {
+      store.getState().plantCrop(id, plots[0]?.id ?? '', 'pepper');
+    });
     act(() =>
       store
         .getState()
@@ -505,13 +596,13 @@ describe('greenhouse', () => {
           withGreenhouse(
             store.getState().game,
             { equipment: { heater: { level: 1, wear: 0 } } },
-            0,
+            20,
           ),
         ),
     );
     const window = openGreenhouse(store);
     expect(within(window).getByRole('alert')).toHaveTextContent(
-      'Not enough Volticoins: the equipment is off.',
+      'The equipment is off: the last 20 Volticoins are kept for seeds.',
     );
   });
 });
@@ -526,8 +617,18 @@ describe('energy', () => {
     tapBuilding('energy');
     const window = screen.getByRole('dialog', { name: 'Energy' });
     // The game starts at midnight: the night tariff, nothing to power.
-    expect(window).toHaveTextContent('Night');
-    expect(window).toHaveTextContent('Day from 07:00');
+    const night = hourPrices(0, defaultContent).buy.toFixed(2);
+    expect(window).toHaveTextContent(`Grid power now ${night} a kWh · Night`);
+    // The day's prices, cheapest first, at this season's level.
+    const prices = within(window).getByRole('list', { name: 'Grid prices' });
+    const tiers = within(prices)
+      .getAllByRole('listitem')
+      .map((tier) => tier.textContent);
+    expect(tiers).toEqual([
+      `Night 23:00–07:00${night}`,
+      expect.stringMatching(/^Day, Evening 07:00–17:00, 21:00–23:00\d\.\d\d$/),
+      expect.stringMatching(/^Peak 17:00–21:00\d\.\d\d$/),
+    ]);
     expect(flow(window, 'Solar panels')).toHaveTextContent('None built yet');
     expect(flow(window, 'Grid')).toHaveTextContent('Nothing bought or sold');
   });
@@ -572,25 +673,28 @@ describe('energy', () => {
     expect(Number(meter.getAttribute('aria-valuenow'))).toBeGreaterThan(5);
   });
 
-  it('adds up the day’s costs, and keeps yesterday’s', async () => {
+  it('adds up the day’s power, and keeps yesterday’s', async () => {
     const user = userEvent.setup();
     const { store, tapBuilding, runTicks } = renderApp();
     runTicks(0);
+    const greenhouse = firstGreenhouseOf(store);
     act(() => {
-      store.getState().buyEquipment(firstGreenhouseOf(store).id, 'lights');
+      store.getState().buyEquipment(greenhouse.id, 'lights');
+      store
+        .getState()
+        .plantCrop(greenhouse.id, greenhouse.plots[0]?.id ?? '', 'pepper');
     });
     tapBuilding('energy');
     const window = screen.getByRole('dialog', { name: 'Energy' });
-    await user.click(within(window).getByRole('tab', { name: 'Costs' }));
-    const grid = () =>
-      within(window).getByRole('row', { name: /^Power from the grid/ });
-    expect(grid()).toHaveTextContent('–');
+    await user.click(within(window).getByRole('tab', { name: 'Today' }));
+    const bought = () =>
+      within(window).getByRole('row', { name: /^Bought from the grid/ });
+    expect(bought()).toHaveTextContent('–');
 
     runTicks(24);
-    const yesterday = store.getState().game.energy.yesterday;
-    expect(yesterday?.power).toBeGreaterThan(0);
-    expect(grid()).not.toHaveTextContent('–');
-    expect(within(window).getByRole('row', { name: /^Total/ })).toBeDefined();
+    const yesterday = store.getState().game.books.yesterday;
+    expect(yesterday?.boughtKwh).toBeGreaterThan(0);
+    expect(bought()).not.toHaveTextContent('–');
   });
 });
 
@@ -696,7 +800,7 @@ describe('save tools', () => {
     expect(store.getState().game).toBe(before);
   });
 
-  it('starts a new game only after a confirmation', async () => {
+  it('starts a new game only after a confirmation, with the guide', async () => {
     const { user, store, freshGame, services } = await openSettings();
     await user.click(screen.getByRole('button', { name: /New game/ }));
     expect(services.newGame).not.toHaveBeenCalled();
@@ -704,5 +808,6 @@ describe('save tools', () => {
 
     expect(store.getState().game).toBe(freshGame);
     expect(screen.getByRole('status')).toHaveTextContent('New game started');
+    expect(screen.getByRole('dialog', { name: 'How to play' })).toBeDefined();
   });
 });

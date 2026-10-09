@@ -23,7 +23,7 @@ const MARGIN = 0.1;
 /**
  * The climate computer's targets: just inside the band that suits every crop
  * growing (or the middle, where the crops disagree), the cheap side for the
- * air and the middle for water and nutrients. With nothing growing, every
+ * air and the middle for water. With nothing growing, every
  * device idles.
  */
 export function autoSetpoints(
@@ -41,7 +41,6 @@ export function autoSetpoints(
       co2: ranges.co2.min,
       light: ranges.light.min,
       water: ranges.water.min,
-      nutrients: ranges.nutrients.min,
     };
   }
 
@@ -62,7 +61,6 @@ export function autoSetpoints(
     co2: at('co2', MARGIN),
     light: at('light', MARGIN),
     water: at('water', 0.5),
-    nutrients: at('nutrients', 0.5),
   };
   const clamp = (id: SetpointId) =>
     Math.min(ranges[id].max, Math.max(ranges[id].min, targets[id]));
@@ -74,7 +72,6 @@ export function autoSetpoints(
     co2: clamp('co2'),
     light: clamp('light'),
     water: clamp('water'),
-    nutrients: clamp('nutrients'),
   };
 }
 

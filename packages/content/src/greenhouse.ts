@@ -14,7 +14,6 @@ export const PHYSICS: ClimatePhysicsConfig = {
   sunHeat: 0.004,
   ventHeatLoss: 0.05,
   heatingDries: 3,
-  fogCooling: 0.01,
   transpiration: 4,
   co2Uptake: 20,
   settle: { temperature: 0.6, humidity: 0.6, co2: 0.8, light: 1 },
@@ -27,7 +26,6 @@ export const GREENHOUSE: GreenhouseConfig = {
     co2: 420,
     light: 400,
     water: 65,
-    nutrients: 2.5,
   },
   // Better insulation keeps the sun's heat in: warmer for free, but it needs
   // venting for crops that like it cool.
@@ -73,7 +71,6 @@ export const CONTROL: ControlConfig = {
     co2: { min: 400, max: 1500, step: 50 },
     light: { min: 0, max: 1000, step: 50 },
     water: { min: 30, max: 90, step: 5 },
-    nutrients: { min: 0.5, max: 5, step: 0.1 },
   },
   initial: {
     heatTo: 23,
@@ -83,7 +80,6 @@ export const CONTROL: ControlConfig = {
     co2: 800,
     light: 500,
     water: 65,
-    nutrients: 2.5,
   },
   temperatureGap: 1,
   humidityGap: 5,

@@ -1,0 +1,48 @@
+/* Tables of numbers: the money and energy windows. */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 4px 6px;
+  border-bottom: 1.5px solid var(--cream-dark);
+  text-align: right;
+}
+
+.table th[scope='row'],
+.table thead th:first-child {
+  font-weight: 500;
+  text-align: left;
+}
+
+.table thead th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.group th {
+  padding-top: 10px;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.total th,
+.total td {
+  font-weight: 700;
+}
+
+.gain td {
+  color: var(--green-dark);
+}
+
+.loss td {
+  color: var(--red-dark);
+}

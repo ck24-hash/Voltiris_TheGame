@@ -1,0 +1,100 @@
+{
+  "version": 4,
+  "playerId": "6f1c2a9e-3b7d-4c55-9a10-2d4e8b7f0c31",
+  "clock": { "gameHour": 2030, "lastTickAt": 1775612400000 },
+  "rng": { "seed": 1234, "state": 3141592653 },
+  "money": 1288,
+  "owed": 0.625,
+  "greenhouses": [
+    {
+      "id": "0b9a4c7e-5d21-4f3a-8e6b-1c2d3e4f5a6b",
+      "climate": {
+        "temperature": 23.4,
+        "humidity": 75,
+        "co2": 801.2,
+        "light": 500,
+        "water": 65,
+        "nutrients": 2.5
+      },
+      "plots": [
+        {
+          "id": "1a2b3c4d-0000-4000-8000-000000000001",
+          "planting": {
+            "status": "growing",
+            "cropId": "tomato",
+            "plantedAtHour": 2000,
+            "growthHours": 27.25,
+            "stress": 0.2
+          }
+        },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000002", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000003", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000004", "planting": null }
+      ],
+      "glass": 1,
+      "size": 1,
+      "equipment": {
+        "heater": { "level": 2, "wear": 0.05 },
+        "fertigation": { "level": 1, "wear": 0.2 }
+      },
+      "setpoints": {
+        "heatTo": 23,
+        "ventAbove": 25,
+        "humidityMax": 85,
+        "humidityMin": 75,
+        "co2": 800,
+        "light": 500,
+        "water": 62,
+        "nutrients": 2.2
+      },
+      "computer": false,
+      "auto": false
+    }
+  ],
+  "storage": {
+    "lots": [
+      {
+        "id": "2b3c4d5e-0000-4000-8000-000000000001",
+        "cropId": "cucumber",
+        "units": 14,
+        "quality": 0.9,
+        "harvestedAtHour": 2010
+      }
+    ]
+  },
+  "market": {
+    "swings": {
+      "microgreens": 1.01,
+      "cucumber": 0.93,
+      "strawberry": 1.05,
+      "tomato": 1.1,
+      "pepper": 0.98
+    }
+  },
+  "energy": {
+    "solar": 1,
+    "battery": 1,
+    "chp": 0,
+    "stored": 4.2,
+    "today": {
+      "solar": 3.1,
+      "chp": 0,
+      "bought": 1.5,
+      "sold": 0.4,
+      "power": 0.18,
+      "heating": 0.9,
+      "co2": 0,
+      "chpFuel": 0
+    },
+    "yesterday": {
+      "solar": 9.8,
+      "chp": 0,
+      "bought": 6.2,
+      "sold": 1.1,
+      "power": 0.71,
+      "heating": 3.4,
+      "co2": 0,
+      "chpFuel": 0
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import type { CropDef, CropId } from './types';
 
-// Starting values; balanced in Phase 11. Growth times are set so that, in the
+// Starting values; balanced in Phase 11. Prices are fixed. Growth times are set so that, in the
 // starting greenhouse, crops take about 2 min, 7 min, 30 min, 1 h and 2 h of
 // real time. Longer crops earn more per harvest but less per hour, so active
 // play pays and slow crops suit a break.
@@ -11,10 +11,8 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
     growthHours: 8,
     yieldPerPlot: 6,
     seedCost: 3,
-    basePrice: 1.25,
-    seasonalPrice: { spring: 1, summer: 0.95, autumn: 1, winter: 1.1 },
+    price: 2,
     waterUse: 0.05,
-    nutrientUse: 0.002,
     shelfLifeDays: 4,
     climate: {
       temperature: {
@@ -62,15 +60,6 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
         stressBelow: 1.5,
         stressAbove: 0.5,
       },
-      nutrients: {
-        limitLow: 0.2,
-        optimalLow: 0.8,
-        optimalHigh: 2.6,
-        limitHigh: 4.5,
-        growthWeight: 0.5,
-        stressBelow: 0.5,
-        stressAbove: 1,
-      },
     },
   },
 
@@ -80,10 +69,8 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
     growthHours: 24,
     yieldPerPlot: 14,
     seedCost: 6,
-    basePrice: 1.8,
-    seasonalPrice: { spring: 1.1, summer: 0.8, autumn: 1, winter: 1.25 },
+    price: 3.5,
     waterUse: 0.12,
-    nutrientUse: 0.004,
     shelfLifeDays: 8,
     climate: {
       temperature: {
@@ -131,15 +118,6 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
         stressBelow: 2,
         stressAbove: 0.5,
       },
-      nutrients: {
-        limitLow: 0.5,
-        optimalLow: 1.8,
-        optimalHigh: 2.8,
-        limitHigh: 5,
-        growthWeight: 0.75,
-        stressBelow: 1,
-        stressAbove: 1,
-      },
     },
   },
 
@@ -149,10 +127,8 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
     growthHours: 112,
     yieldPerPlot: 8,
     seedCost: 15,
-    basePrice: 6,
-    seasonalPrice: { spring: 1.2, summer: 0.85, autumn: 1, winter: 1.3 },
+    price: 12,
     waterUse: 0.06,
-    nutrientUse: 0.002,
     shelfLifeDays: 3,
     climate: {
       temperature: {
@@ -200,28 +176,17 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
         stressBelow: 1,
         stressAbove: 1.5,
       },
-      nutrients: {
-        limitLow: 0.4,
-        optimalLow: 1.4,
-        optimalHigh: 2.4,
-        limitHigh: 4.5,
-        growthWeight: 1,
-        stressBelow: 1,
-        stressAbove: 1.5,
-      },
     },
   },
 
-  // Likes high light and CO2; sensitive to humidity and nutrients.
+  // Likes high light and CO2; sensitive to humidity.
   tomato: {
     name: 'Tomato',
     growthHours: 196,
     yieldPerPlot: 16,
     seedCost: 15,
-    basePrice: 4.5,
-    seasonalPrice: { spring: 1.05, summer: 0.8, autumn: 1, winter: 1.3 },
+    price: 9,
     waterUse: 0.04,
-    nutrientUse: 0.0015,
     shelfLifeDays: 10,
     climate: {
       temperature: {
@@ -269,15 +234,6 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
         stressBelow: 1,
         stressAbove: 1,
       },
-      nutrients: {
-        limitLow: 0.5,
-        optimalLow: 2.5,
-        optimalHigh: 3.5,
-        limitHigh: 6,
-        growthWeight: 1,
-        stressBelow: 1.5,
-        stressAbove: 1.5,
-      },
     },
   },
 
@@ -287,10 +243,8 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
     growthHours: 425,
     yieldPerPlot: 10,
     seedCost: 30,
-    basePrice: 15,
-    seasonalPrice: { spring: 1, summer: 0.85, autumn: 1.05, winter: 1.25 },
+    price: 28,
     waterUse: 0.025,
-    nutrientUse: 0.001,
     shelfLifeDays: 14,
     climate: {
       temperature: {
@@ -334,15 +288,6 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
         optimalLow: 45,
         optimalHigh: 70,
         limitHigh: 95,
-        growthWeight: 1,
-        stressBelow: 1,
-        stressAbove: 1,
-      },
-      nutrients: {
-        limitLow: 0.5,
-        optimalLow: 2.0,
-        optimalHigh: 3.0,
-        limitHigh: 6,
         growthWeight: 1,
         stressBelow: 1,
         stressAbove: 1,

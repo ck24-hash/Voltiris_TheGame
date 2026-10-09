@@ -19,8 +19,7 @@ export const TEST_PLAYER_ID = '00000000-0000-4000-8000-000000000000';
 
 /**
  * The game's content, except that the air keeps whatever climate it has:
- * for tests of growth in a climate set by hand. Water and nutrients still
- * get used up.
+ * for tests of growth in a climate set by hand. Water still gets used up.
  */
 export const STILL_AIR: GameContent = {
   ...defaultContent,
@@ -202,14 +201,14 @@ export interface GrownCrop {
   /** Ticks from planting until the crops were ready. */
   readonly ticks: number;
   readonly quality: number;
-  /** Volticoins spent on water and nutrients by hand. */
+  /** Volticoins spent on watering by hand. */
   readonly careCost: number;
 }
 
 /**
  * Plants every plot of the first greenhouse with one crop and runs the game
- * until they are ready, watering and feeding by hand whenever the crop's
- * gauge says it needs it (unless `byHand` is false).
+ * until they are ready, watering by hand whenever the crop's gauge says it
+ * needs it (unless `byHand` is false).
  */
 export function growCrop(
   state: GameState,
@@ -225,16 +224,8 @@ export function growCrop(
     next = plant(next, cropId, k, content);
   });
   const greenhouseId = firstGreenhouse(next).id;
-  const bands = content.crops[cropId].climate;
+  const waterLow = content.crops[cropId].climate.water.optimalLow;
   let careCost = 0;
-  const care = (type: 'Water' | 'Fertilize') => {
-    next = accept(
-      next,
-      { type, id: 'cmd-care', issuedAt: 0, greenhouseId },
-      content,
-    );
-    careCost += content.care[type === 'Water' ? 'water' : 'nutrients'].cost;
-  };
   for (let ticks = 1; ticks <= limit; ticks++) {
     next = tick(next, content);
     const planting = plantingAt(next);
@@ -242,9 +233,14 @@ export function growCrop(
       return { state: next, ticks, quality: planting.quality, careCost };
     }
     if (!byHand) continue;
-    const { water, nutrients } = firstGreenhouse(next).climate;
-    if (water < bands.water.optimalLow) care('Water');
-    if (nutrients < bands.nutrients.optimalLow) care('Fertilize');
+    if (firstGreenhouse(next).climate.water < waterLow) {
+      next = accept(
+        next,
+        { type: 'Water', id: 'cmd-water', issuedAt: 0, greenhouseId },
+        content,
+      );
+      careCost += content.care.water.cost;
+    }
   }
   throw new Error(`The ${cropId} was not ready within ${limit} ticks`);
 }

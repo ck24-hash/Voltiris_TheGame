@@ -109,7 +109,7 @@ export const COLORS = {
   heatPump: 0xeceff1,
   waterTank: 0x4fc3f7,
   waterTankDark: 0x0288d1,
-  feedTank: 0x81c784,
+  returnTank: 0x81c784,
   co2Band: 0x42a5f5,
   co2Puff: 0x90caf9,
   fogPump: 0x90a4ae,

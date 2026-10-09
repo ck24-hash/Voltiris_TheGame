@@ -1,6 +1,5 @@
 import {
   CLIMATE_VARIABLES,
-  CROP_IDS,
   EQUIPMENT_KINDS,
   SETPOINT_IDS,
   type Climate,
@@ -14,12 +13,11 @@ import { levelAt } from './equipment';
 import {
   STATE_VERSION,
   type Energy,
-  type EnergyDay,
+  type DayBooks,
   type Equipment,
   type GameState,
   type Greenhouse,
   type InstalledEquipment,
-  type Market,
   type Planting,
   type Plot,
   type Storage,
@@ -110,7 +108,76 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
       yesterday: null,
     },
   }),
+  // A simpler game: no nutrients (fertigation became irrigation), fixed
+  // crop prices (no market), and the day's money in the books.
+  4: (old) => {
+    const next: Record<string, unknown> = {
+      ...old,
+      version: 5,
+      greenhouses: Array.isArray(old.greenhouses)
+        ? old.greenhouses.map(withoutNutrients)
+        : old.greenhouses,
+      energy: isRecord(old.energy)
+        ? {
+            solar: old.energy.solar,
+            battery: old.energy.battery,
+            chp: old.energy.chp,
+            stored: old.energy.stored,
+          }
+        : old.energy,
+      books: {
+        today: {
+          sales: 0,
+          powerSold: 0,
+          seeds: 0,
+          water: 0,
+          power: 0,
+          fuel: 0,
+          co2: 0,
+          purchases: 0,
+          solarKwh: 0,
+          chpKwh: 0,
+          boughtKwh: 0,
+          soldKwh: 0,
+        },
+        yesterday: null,
+      },
+    };
+    delete next.market;
+    return next;
+  },
 };
+
+/** A version 4 greenhouse without nutrients, its fertigation as irrigation. */
+function withoutNutrients(greenhouse: unknown): unknown {
+  if (!isRecord(greenhouse)) return greenhouse;
+  const drop = (value: unknown) => {
+    if (!isRecord(value)) return value;
+    const copy: Record<string, unknown> = { ...value };
+    delete copy.nutrients;
+    return copy;
+  };
+  const equipment = isRecord(greenhouse.equipment)
+    ? { ...greenhouse.equipment }
+    : greenhouse.equipment;
+  if (isRecord(equipment) && equipment.fertigation !== undefined) {
+    const copy: Record<string, unknown> = { ...equipment };
+    copy.irrigation = copy.fertigation;
+    delete copy.fertigation;
+    return {
+      ...greenhouse,
+      climate: drop(greenhouse.climate),
+      setpoints: drop(greenhouse.setpoints),
+      equipment: copy,
+    };
+  }
+  return {
+    ...greenhouse,
+    climate: drop(greenhouse.climate),
+    setpoints: drop(greenhouse.setpoints),
+    equipment,
+  };
+}
 
 export type RestoreErrorCode =
   'NOT_A_SAVE' | 'TOO_NEW' | 'NO_MIGRATION' | 'INVALID';
@@ -242,12 +309,6 @@ function fraction(value: unknown, path: string): number {
   return n;
 }
 
-function positive(value: unknown, path: string): number {
-  const n = number(value, path);
-  if (n <= 0) invalid(path, 'a number above 0');
-  return n;
-}
-
 function wholeNumber(value: unknown, path: string, min: number): number {
   const n = number(value, path, min);
   if (!Number.isInteger(n)) invalid(path, 'a whole number');
@@ -282,6 +343,7 @@ function cropId(value: unknown, path: string, content: GameContent): CropId {
 function readGameState(raw: RawState, content: GameContent): GameState {
   const clock = record(raw.clock, 'clock');
   const rng = record(raw.rng, 'rng');
+  const books = record(raw.books, 'books');
   return {
     version: wholeNumber(raw.version, 'version', STATE_VERSION),
     playerId: text(raw.playerId, 'playerId'),
@@ -299,8 +361,14 @@ function readGameState(raw: RawState, content: GameContent): GameState {
       readGreenhouse(g, `greenhouses[${k}]`, content),
     ),
     storage: readStorage(raw.storage, content),
-    market: readMarket(raw.market),
     energy: readEnergy(raw.energy, content),
+    books: {
+      today: readDayBooks(books.today, 'books.today'),
+      yesterday:
+        books.yesterday === null
+          ? null
+          : readDayBooks(books.yesterday, 'books.yesterday'),
+    },
   };
 }
 
@@ -323,27 +391,25 @@ function readEnergy(raw: unknown, content: GameContent): Energy {
     battery,
     chp: assetLevel('chp'),
     stored,
-    today: readEnergyDay(energy.today, 'energy.today'),
-    yesterday:
-      energy.yesterday === null
-        ? null
-        : readEnergyDay(energy.yesterday, 'energy.yesterday'),
   };
 }
 
-function readEnergyDay(raw: unknown, path: string): EnergyDay {
+function readDayBooks(raw: unknown, path: string): DayBooks {
   const day = record(raw, path);
-  const kwh = (key: string) => number(day[key], `${path}.${key}`, 0);
-  const coins = (key: string) => number(day[key], `${path}.${key}`);
+  const amount = (key: keyof DayBooks) => number(day[key], `${path}.${key}`, 0);
   return {
-    solar: kwh('solar'),
-    chp: kwh('chp'),
-    bought: kwh('bought'),
-    sold: kwh('sold'),
-    power: coins('power'),
-    heating: coins('heating'),
-    co2: coins('co2'),
-    chpFuel: coins('chpFuel'),
+    sales: amount('sales'),
+    powerSold: amount('powerSold'),
+    seeds: amount('seeds'),
+    water: amount('water'),
+    power: amount('power'),
+    fuel: amount('fuel'),
+    co2: amount('co2'),
+    purchases: amount('purchases'),
+    solarKwh: amount('solarKwh'),
+    chpKwh: amount('chpKwh'),
+    boughtKwh: amount('boughtKwh'),
+    soldKwh: amount('soldKwh'),
   };
 }
 
@@ -374,16 +440,6 @@ function readLot(raw: unknown, path: string, content: GameContent): StoredLot {
       `${path}.harvestedAtHour`,
       0,
     ),
-  };
-}
-
-function readMarket(raw: unknown): Market {
-  const market = record(raw, 'market');
-  const swings = record(market.swings, 'market.swings');
-  return {
-    swings: Object.fromEntries(
-      CROP_IDS.map((id) => [id, positive(swings[id], `market.swings.${id}`)]),
-    ) as Record<CropId, number>,
   };
 }
 

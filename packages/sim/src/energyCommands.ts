@@ -1,4 +1,5 @@
 import { ENERGY_ASSETS, type GameContent } from '@voltiris/content';
+import { record } from './books';
 import { fail } from './commandHelpers';
 import type { BuyEnergyCommand, CommandResult } from './commands';
 import type { GameState } from './state';
@@ -22,10 +23,13 @@ export function buyEnergy(
   // A bigger battery keeps the charge it had.
   return {
     ok: true,
-    state: {
-      ...state,
-      money: state.money - next.price,
-      energy: { ...state.energy, [asset]: level },
-    },
+    state: record(
+      {
+        ...state,
+        money: state.money - next.price,
+        energy: { ...state.energy, [asset]: level },
+      },
+      { purchases: next.price },
+    ),
   };
 }

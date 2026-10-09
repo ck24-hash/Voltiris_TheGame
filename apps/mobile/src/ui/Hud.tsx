@@ -6,11 +6,12 @@ import {
   formatDayTime,
   formatSeason,
 } from '../game/format';
+import { cx } from './cx';
 import styles from './Hud.module.css';
 import { GearIcon, SeasonIcon } from './icons';
 import { VolticoinIcon } from './VolticoinIcon';
 
-/** Calendar top left; money and settings top right. */
+/** Calendar top left; money, the guide and settings top right. */
 export function Hud() {
   const money = useGame((s) => s.game.money);
   const gameHour = useGame((s) => s.game.clock.gameHour);
@@ -31,14 +32,27 @@ export function Hud() {
       </div>
 
       <div className={styles.right}>
-        <div className={styles.coins} title={formatCoinsLong(money)}>
+        <button
+          type="button"
+          className={styles.coins}
+          title="Money"
+          onClick={() => openWindow('money')}
+        >
           <span className={styles.coinIcon}>
             <VolticoinIcon size={34} />
           </span>
           <span className={styles.money} aria-label={formatCoinsLong(money)}>
             {formatCoins(money)}
           </span>
-        </div>
+        </button>
+        <button
+          type="button"
+          className={cx(styles.gear, styles.help)}
+          aria-label="How to play"
+          onClick={() => openWindow('guide')}
+        >
+          ?
+        </button>
         <button
           type="button"
           className={styles.gear}

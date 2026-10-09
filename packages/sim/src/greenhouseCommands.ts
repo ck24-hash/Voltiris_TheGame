@@ -5,6 +5,7 @@ import {
   type SetpointId,
   type Setpoints,
 } from '@voltiris/content';
+import { record } from './books';
 import { fail, findGreenhouse, updateGreenhouse } from './commandHelpers';
 import type {
   BuyEquipmentCommand,
@@ -34,10 +35,10 @@ function buy(
   }
   return {
     ok: true,
-    state: {
-      ...updateGreenhouse(state, greenhouse),
-      money: state.money - price,
-    },
+    state: record(
+      { ...updateGreenhouse(state, greenhouse), money: state.money - price },
+      { purchases: price },
+    ),
   };
 }
 

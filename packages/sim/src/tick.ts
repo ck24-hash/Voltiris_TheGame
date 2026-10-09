@@ -9,9 +9,11 @@ import {
   plantActivity,
   type ClimatePlan,
 } from './climate';
+import { addToDay, closeHour } from './books';
 import type { Clock } from './clock';
 import {
   afterHour,
+  energyEntry,
   hourPrices,
   runEnergy,
   type EnergyDemand,
@@ -19,8 +21,6 @@ import {
 } from './energy';
 import { equipmentLevel } from './equipment';
 import { growPlanting } from './growth';
-import { tickMarket } from './market';
-import { createRng } from './rng';
 import type {
   Equipment,
   GameState,
@@ -33,19 +33,23 @@ import { ticksDue } from './time';
 
 /** What the coming hour does: every greenhouse's plan, and the power supply. */
 export interface HourPlan {
-  /** False when the money does not cover the hour: all equipment stays off. */
+  /**
+   * False when the hour would take the money below the reserve for seeds:
+   * all equipment stays off.
+   */
   readonly running: boolean;
   /** One plan per greenhouse, in the same order. */
   readonly plans: readonly ClimatePlan[];
   readonly energy: EnergyHour;
-  /** The hour's bill: energy and supplies. Negative when selling earns more. */
+  /** The hour's bill: energy and water. Negative when selling earns more. */
   readonly cost: number;
 }
 
 /**
  * Plans the hour that starts now. The equipment runs only while the money
- * covers everything owed; otherwise it all stays off, and the solar panels
- * and the battery still run (they cost nothing, and spare power sells).
+ * covers everything owed and keeps the reserve for seeds; otherwise it all
+ * stays off, and the solar panels and the battery still run (they cost
+ * nothing, and spare power sells).
  */
 export function planHour(state: GameState, content: GameContent): HourPlan {
   const { gameHour } = state.clock;
@@ -66,11 +70,13 @@ export function planHour(state: GameState, content: GameContent): HourPlan {
       content,
       { gridCharging: running },
     );
-    const supplies = plans.reduce((sum, p) => sum + p.supplies, 0);
-    return { running, plans, energy, cost: energy.total + supplies };
+    const water = plans.reduce((sum, p) => sum + p.waterCost, 0);
+    return { running, plans, energy, cost: energy.total + water };
   };
   const running = plan(true);
-  return state.owed + running.cost <= state.money ? running : plan(false);
+  const affordable =
+    state.owed + running.cost <= state.money - content.economy.reserve;
+  return affordable || running.cost <= 0 ? running : plan(false);
 }
 
 /** What the greenhouses' plans need from the energy system. */
@@ -85,19 +91,22 @@ function energyDemand(plans: readonly ClimatePlan[]): EnergyDemand {
 /**
  * Advances the game by exactly one tick (one in-game hour). The hour's bill
  * is paid in whole Volticoins, and the fraction carries over in `owed`;
- * selling spare power can make it a payment to the player.
+ * selling spare power can make it a payment to the player. The books keep
+ * the hour's running costs; at midnight today becomes yesterday.
  */
 export function tick(state: GameState, content: GameContent): GameState {
   const gameHour = state.clock.gameHour + 1;
-  const rng = createRng(state.rng);
-  const market = tickMarket(state.market, rng, content.market);
   const hour = planHour(state, content);
   const due = state.owed + hour.cost;
   const pay = Math.floor(due);
+  const water = hour.plans.reduce((sum, p) => sum + p.waterCost, 0);
+  const today = addToDay(state.books.today, {
+    ...energyEntry(hour.energy),
+    water,
+  });
   return {
     ...state,
     clock: { ...state.clock, gameHour },
-    rng: rng.snapshot(),
     money: state.money - pay,
     owed: due - pay,
     greenhouses: state.greenhouses.map((greenhouse, k) => {
@@ -106,8 +115,8 @@ export function tick(state: GameState, content: GameContent): GameState {
       return tickGreenhouse(greenhouse, plan, gameHour, content);
     }),
     storage: removeSpoiled(state.storage, gameHour, content),
-    market,
-    energy: afterHour(state.energy, hour.energy, state.clock.gameHour),
+    energy: afterHour(state.energy, hour.energy),
+    books: closeHour({ ...state.books, today }, state.clock.gameHour),
   };
 }
 

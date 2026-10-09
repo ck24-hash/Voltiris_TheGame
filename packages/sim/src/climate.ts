@@ -22,8 +22,6 @@ export interface PlantActivity {
   readonly growth: number;
   /** Water (moisture % points) the plants take up. */
   readonly water: number;
-  /** Nutrients (EC) the plants take up. */
-  readonly nutrients: number;
 }
 
 export function plantActivity(
@@ -32,21 +30,22 @@ export function plantActivity(
 ): PlantActivity {
   let growth = 0;
   let water = 0;
-  let nutrients = 0;
   for (const { planting } of greenhouse.plots) {
     if (planting?.status !== 'growing') continue;
     const crop = content.crops[planting.cropId];
     const rate = growthRate(greenhouse.climate, crop);
     growth += rate;
     water += rate * crop.waterUse;
-    nutrients += rate * crop.nutrientUse;
   }
-  return { growth, water, nutrients };
+  return { growth, water };
 }
 
 export interface DeviceRun {
   /** How hard it works this hour: 0 is idle, 1 flat out. */
   readonly load: number;
+  /** Power and gas it uses this hour, kWh (so kW). */
+  readonly power: number;
+  readonly gas: number;
   /**
    * What it costs this hour in energy and supplies at this hour's prices,
    * Volticoins: before solar, the battery and the CHP cut the bill.
@@ -58,23 +57,25 @@ export interface DeviceRun {
 export interface ClimatePlan {
   /** The targets in use: the player's, or the climate computer's. */
   readonly setpoints: Setpoints;
-  /** The devices that run this hour (all installed ones, unless switched off). */
+  /**
+   * The devices that run this hour: every installed one, unless nothing is
+   * growing (they rest) or the money does not cover the hour.
+   */
   readonly devices: Readonly<Partial<Record<EquipmentKind, DeviceRun>>>;
+  /** Nothing is growing, so the equipment rests and costs nothing. */
+  readonly resting: boolean;
   /** Where the air is heading with the devices running this way. */
   readonly balance: Readonly<Record<AirVariable, number>>;
-  /**
-   * Water and nutrients at the end of the hour: what the plants leave,
-   * topped up by fertigation.
-   */
-  readonly substrate: { readonly water: number; readonly nutrients: number };
+  /** Water at the end of the hour: what the plants leave, topped up by irrigation. */
+  readonly water: number;
   /** Energy for the whole greenhouse this hour, kWh: heater gas, and power. */
   readonly gas: number;
   readonly power: number;
   /** What the heater gives and the injector doses, for the energy system. */
   readonly heat: HeatDemand | null;
   readonly co2: Co2Demand | null;
-  /** Water and fertilizer this hour, Volticoins. */
-  readonly supplies: number;
+  /** Water for the fogger and irrigation this hour, Volticoins. */
+  readonly waterCost: number;
   /** Running costs this hour at this hour's prices (see `DeviceRun.cost`). */
   readonly cost: number;
 }
@@ -84,9 +85,10 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Works out one hour of climate control. With `running` false every device
- * stays off (the player cannot pay for it), and the air heads for the
- * balance the weather, the glass and the plants give.
+ * Works out one hour of climate control. The equipment rests while nothing
+ * grows; with `running` false it stays off too (the player cannot pay for
+ * it). Then the air heads for the balance the weather, the glass and the
+ * plants give.
  */
 export function planClimate(
   greenhouse: Greenhouse,
@@ -100,14 +102,17 @@ export function planClimate(
   const plots = greenhouse.plots.length;
   const glass = glassOf(greenhouse, content);
   const setpoints = controlSetpoints(greenhouse, content);
+  const resting = !greenhouse.plots.some(
+    ({ planting }) => planting?.status === 'growing',
+  );
   const device = <K extends EquipmentKind>(kind: K) =>
-    running ? installedDevice(greenhouse, kind, content) : null;
+    running && !resting ? installedDevice(greenhouse, kind, content) : null;
   const heater = device('heater');
   const vents = device('vents');
   const fogger = device('fogger');
   const co2 = device('co2');
   const lights = device('lights');
-  const fertigation = device('fertigation');
+  const irrigation = device('irrigation');
 
   // Light: the sun through the glass, topped up by the lamps. Both warm.
   const sunlight = outside.sunlight * glass.transmission;
@@ -140,21 +145,18 @@ export function planClimate(
 
   // The heater makes up what the air needs to reach heatTo.
   const heaterMax = heater ? heater.level.heat * heater.strength : 0;
-  const heatFor = (cooling: number) =>
-    clamp(
-      (setpoints.heatTo - outside.temperature) * heatLoss - warmth + cooling,
-      0,
-      heaterMax,
-    );
+  const heat = clamp(
+    (setpoints.heatTo - outside.temperature) * heatLoss - warmth,
+    0,
+    heaterMax,
+  );
 
   // The fogger brings humidity up to humidityMin, allowing for the heat that
-  // dries the air; its fog cools, and the heater makes up for that.
+  // dries the air.
   const foggerMax = fogger ? fogger.level.moisture * fogger.strength : 0;
   const unfogged =
-    outside.humidity + moisture / air - physics.heatingDries * heatFor(0);
+    outside.humidity + moisture / air - physics.heatingDries * heat;
   const fog = clamp((setpoints.humidityMin - unfogged) * air, 0, foggerMax);
-  const cooling = fog * physics.fogCooling;
-  const heat = heatFor(cooling);
 
   // A gas heater's exhaust adds CO₂; the injector tops it up to the target.
   const exhaust =
@@ -168,92 +170,88 @@ export function planClimate(
     doseMax,
   );
 
-  // The plants drink; fertigation tops water and nutrients back up, right
-  // to the setpoints if its output allows.
-  const { climate } = greenhouse;
-  const waterMax = fertigation
-    ? fertigation.level.water * fertigation.strength
+  // The plants drink; irrigation tops the water back up, right to the
+  // setpoint if its output allows.
+  const waterMax = irrigation
+    ? irrigation.level.water * irrigation.strength
     : 0;
-  const nutrientsMax = fertigation
-    ? fertigation.level.nutrients * fertigation.strength
-    : 0;
-  const topUp = (left: number, target: number, max: number) =>
-    left < target ? Math.min(target, left + max) : left;
-  const waterLeft = Math.max(0, climate.water - activity.water);
-  const nutrientsLeft = Math.max(0, climate.nutrients - activity.nutrients);
-  const substrate = {
-    water: topUp(waterLeft, setpoints.water, waterMax),
-    nutrients: topUp(nutrientsLeft, setpoints.nutrients, nutrientsMax),
-  };
-  const refill = {
-    water: substrate.water - waterLeft,
-    nutrients: substrate.nutrients - nutrientsLeft,
-  };
+  const waterLeft = Math.max(0, greenhouse.climate.water - activity.water);
+  const water =
+    waterLeft < setpoints.water
+      ? Math.min(setpoints.water, waterLeft + waterMax)
+      : waterLeft;
+  const refill = water - waterLeft;
 
-  // Energy and supplies, for the whole greenhouse.
+  // Energy and water, for the whole greenhouse.
   const devices: Partial<Record<EquipmentKind, DeviceRun>> = {};
-  let gas = 0;
-  let power = 0;
-  let supplies = 0;
   let heatDemand: HeatDemand | null = null;
   let co2Demand: Co2Demand | null = null;
+  const run = (
+    kind: EquipmentKind,
+    load: number,
+    use: { power?: number; gas?: number; supplies?: number },
+  ) => {
+    const { power = 0, gas = 0, supplies = 0 } = use;
+    devices[kind] = {
+      load,
+      power,
+      gas,
+      cost: power * prices.buy + gas * prices.gas + supplies,
+    };
+  };
   if (heater) {
     const { fuel, efficiency } = heater.level;
     const kwh = heat * plots;
     const used = kwh / efficiency;
-    if (fuel === 'gas') gas += used;
-    else power += used;
     heatDemand = { kwh, fuel, efficiency };
-    devices.heater = {
-      load: heat / heaterMax,
-      cost: used * (fuel === 'gas' ? prices.gas : prices.buy),
-    };
+    run(
+      'heater',
+      heat / heaterMax,
+      fuel === 'gas' ? { gas: used } : { power: used },
+    );
   }
   if (vents) {
     const load = ventAir / ventsMax;
-    const fans = vents.level.power * load * plots;
-    power += fans;
-    devices.vents = { load, cost: fans * prices.buy };
+    run('vents', load, { power: vents.level.power * load * plots });
   }
+  let waterCost = 0;
   if (fogger) {
     const load = fog / foggerMax;
-    const pump = fogger.level.power * load * plots;
-    const water = fog * plots * fogger.level.waterCost;
-    power += pump;
-    supplies += water;
-    devices.fogger = { load, cost: pump * prices.buy + water };
+    const fogWater = fog * plots * fogger.level.waterCost;
+    waterCost += fogWater;
+    run('fogger', load, {
+      power: fogger.level.power * load * plots,
+      supplies: fogWater,
+    });
   }
   if (co2) {
     co2Demand = { units: dose * plots, costPer1000: co2.level.costPer1000 };
-    devices.co2 = {
-      load: dose / doseMax,
-      cost: (co2Demand.units * co2Demand.costPer1000) / 1000,
-    };
+    run('co2', dose / doseMax, {
+      supplies: (co2Demand.units * co2Demand.costPer1000) / 1000,
+    });
   }
   if (lights) {
-    const used = lamps * lights.level.powerPerPar * plots;
-    power += used;
-    devices.lights = { load: lamps / lampsMax, cost: used * prices.buy };
+    run('lights', lamps / lampsMax, {
+      power: lamps * lights.level.powerPerPar * plots,
+    });
   }
-  if (fertigation) {
-    const load = Math.max(
-      refill.water / waterMax,
-      refill.nutrients / nutrientsMax,
-    );
-    const pump = fertigation.level.power * load * plots;
-    const feed =
-      refill.water * fertigation.level.waterCost +
-      refill.nutrients * fertigation.level.nutrientCost;
-    power += pump;
-    supplies += feed;
-    devices.fertigation = { load, cost: pump * prices.buy + feed };
+  if (irrigation) {
+    const load = refill / waterMax;
+    const irrigationWater = refill * irrigation.level.waterCost;
+    waterCost += irrigationWater;
+    run('irrigation', load, {
+      power: irrigation.level.power * load * plots,
+      supplies: irrigationWater,
+    });
   }
+  const runs = Object.values(devices);
 
   return {
     setpoints,
     devices,
+    resting,
     balance: {
-      temperature: outside.temperature + (warmth + heat - cooling) / heatLoss,
+      temperature: outside.temperature + (warmth + heat) / heatLoss,
       humidity: clamp(
         outside.humidity + (moisture + fog) / air - physics.heatingDries * heat,
         0,
@@ -262,13 +260,13 @@ export function planClimate(
       co2: Math.max(0, outside.co2 + (dose + exhaust - uptake) / air),
       light: sunlight + lamps,
     },
-    substrate,
-    gas,
-    power,
+    water,
+    gas: runs.reduce((sum, r) => sum + r.gas, 0),
+    power: runs.reduce((sum, r) => sum + r.power, 0),
     heat: heatDemand,
     co2: co2Demand,
-    supplies,
-    cost: Object.values(devices).reduce((sum, run) => sum + run.cost, 0),
+    waterCost,
+    cost: runs.reduce((sum, r) => sum + r.cost, 0),
   };
 }
 
@@ -293,8 +291,7 @@ export function nextClimate(
     humidity: toward('humidity'),
     co2: toward('co2'),
     light: toward('light'),
-    water: plan.substrate.water,
-    nutrients: plan.substrate.nutrients,
+    water: plan.water,
   };
 }
 

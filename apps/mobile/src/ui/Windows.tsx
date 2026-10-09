@@ -8,12 +8,15 @@ import {
 } from '../game/format';
 import { CROP_ICONS } from '../game/selectors';
 import { BUILDING_INFO } from './buildingInfo';
+import { ClimateWindow } from './ClimateWindow';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
 import { EnergyWindow } from './EnergyWindow';
 import { GreenhouseWindow } from './GreenhouseWindow';
+import { GuideWindow } from './GuideWindow';
 import { ConeIcon } from './icons';
 import { MarketWindow } from './MarketWindow';
+import { MoneyWindow } from './MoneyWindow';
 import { SettingsWindow } from './SettingsWindow';
 import { StorageWindow } from './StorageWindow';
 import styles from './Windows.module.css';
@@ -36,8 +39,14 @@ export function Windows() {
       return <MarketWindow />;
     case 'storage':
       return <StorageWindow />;
-    default:
+    case 'money':
+      return <MoneyWindow />;
+    case 'guide':
+      return <GuideWindow />;
+    case 'village':
       return <BuildingWindow id={window} />;
+    default:
+      return <ClimateWindow variable={window} />;
   }
 }
 

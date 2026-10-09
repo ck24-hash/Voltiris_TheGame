@@ -27,7 +27,13 @@
   background: var(--hud);
   box-shadow: var(--drop);
   color: #fff;
+  text-align: left;
   text-shadow: var(--text-outline);
+  pointer-events: auto;
+}
+
+.badge:active {
+  transform: translateY(2px);
 }
 
 .icon {
@@ -61,10 +67,6 @@
 
 .icon[data-variable='water'] {
   background: #2bb3c0;
-}
-
-.icon[data-variable='nutrients'] {
-  background: #9a6ad6;
 }
 
 .text {

@@ -2,15 +2,15 @@ import type { EnergyConfig } from './types';
 
 // Starting values; balanced in Phase 11.
 export const ENERGY: EnergyConfig = {
-  prices: { gas: 0.06, biogas: 0.035 },
+  prices: { gas: 0.04, biogas: 0.025 },
   grid: {
     // Cheap at night, dear in the evening when everyone cooks.
     tariff: [
-      { name: 'Night', from: 0, price: 0.07 },
-      { name: 'Day', from: 7, price: 0.12 },
-      { name: 'Peak', from: 17, price: 0.2 },
-      { name: 'Evening', from: 21, price: 0.12 },
-      { name: 'Night', from: 23, price: 0.07 },
+      { name: 'Night', from: 0, price: 0.05 },
+      { name: 'Day', from: 7, price: 0.08 },
+      { name: 'Peak', from: 17, price: 0.14 },
+      { name: 'Evening', from: 21, price: 0.08 },
+      { name: 'Night', from: 23, price: 0.05 },
     ],
     seasonal: { spring: 1, summer: 0.9, autumn: 1.05, winter: 1.2 },
     sellShare: 0.5,

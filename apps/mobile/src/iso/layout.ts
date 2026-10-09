@@ -49,7 +49,7 @@ export interface Building {
 }
 
 /** Equipment that stands on the greenhouse floor. */
-type FloorEquipment = 'heater' | 'fertigation' | 'co2' | 'fogger';
+type FloorEquipment = 'heater' | 'irrigation' | 'co2' | 'fogger';
 
 export interface SceneLayout {
   /** Land the player owns; the camera stays over it. */
@@ -89,7 +89,7 @@ export function createLayout(plotCount: number): SceneLayout {
       j: greenhouse.j + 1 + Math.floor(k / PLOT_COLUMNS),
     })),
     equipmentSpots: {
-      fertigation: { i: greenhouse.i, j: greenhouse.j },
+      irrigation: { i: greenhouse.i, j: greenhouse.j },
       heater: { i: greenhouse.i, j: greenhouse.j + 1 },
       co2: { i: greenhouse.i + 1, j: greenhouse.j },
       fogger: { i: greenhouse.i + 2, j: greenhouse.j },

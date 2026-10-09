@@ -10,7 +10,7 @@ import type { RngState } from './rng';
  * Save schema version. Bump it and add a migration (with a test) whenever the
  * shape of GameState changes.
  */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export interface GameState {
   readonly version: number;
@@ -27,8 +27,9 @@ export interface GameState {
   readonly owed: number;
   readonly greenhouses: readonly Greenhouse[];
   readonly storage: Storage;
-  readonly market: Market;
   readonly energy: Energy;
+  /** What came in and went out, today and yesterday. */
+  readonly books: Books;
 }
 
 /** The power supply the greenhouses share: the grid, plus what the player builds. */
@@ -39,23 +40,36 @@ export interface Energy {
   readonly chp: number;
   /** kWh in the battery. */
   readonly stored: number;
-  /** Energy and what it cost so far today (since 00:00). */
-  readonly today: EnergyDay;
-  /** The whole of yesterday; null on the first day. */
-  readonly yesterday: EnergyDay | null;
 }
 
-export interface EnergyDay {
-  /** kWh the solar panels and the CHP made, bought from and sold to the grid. */
-  readonly solar: number;
-  readonly chp: number;
-  readonly bought: number;
-  readonly sold: number;
-  /** Volticoins: the grid (bought less sold), heater gas, CO₂, CHP fuel. */
+export interface Books {
+  /** So far today (since 00:00). */
+  readonly today: DayBooks;
+  /** The whole of yesterday; null on the first day. */
+  readonly yesterday: DayBooks | null;
+}
+
+/** One game day's money by kind (Volticoins), and its power (kWh). */
+export interface DayBooks {
+  /** Money in: crops sold, and spare power sold to the grid. */
+  readonly sales: number;
+  readonly powerSold: number;
+  /** Money out. */
+  readonly seeds: number;
+  /** Watering by hand, irrigation and fog. */
+  readonly water: number;
+  /** Power bought from the grid. */
   readonly power: number;
-  readonly heating: number;
+  /** Gas for the heaters, and the CHP's fuel. */
+  readonly fuel: number;
   readonly co2: number;
-  readonly chpFuel: number;
+  /** Equipment, services, greenhouse upgrades and energy builds. */
+  readonly purchases: number;
+  /** Power: made by the solar panels and the CHP, bought and sold. */
+  readonly solarKwh: number;
+  readonly chpKwh: number;
+  readonly boughtKwh: number;
+  readonly soldKwh: number;
 }
 
 export interface Storage {
@@ -72,14 +86,6 @@ export interface StoredLot {
   /** 0–1, from how the crop grew. Freshness then falls with time. */
   readonly quality: number;
   readonly harvestedAtHour: number;
-}
-
-export interface Market {
-  /**
-   * Per crop, the market's current swing around the seasonal price (1 is
-   * normal). Crop prices are base price × season × swing.
-   */
-  readonly swings: Readonly<Record<CropId, number>>;
 }
 
 export interface GameClock {

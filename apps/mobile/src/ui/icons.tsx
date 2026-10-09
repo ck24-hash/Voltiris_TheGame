@@ -68,16 +68,6 @@ const CLIMATE_PATHS: Record<ClimateVariable, ReactNode> = {
       <path d="M20 13.5l.6 1.5M21 10.5l1 .5" />
     </>
   ),
-  nutrients: (
-    <>
-      <path d="M9.5 3h5M10.5 3v6l-5 8.6A2.3 2.3 0 0 0 7.5 21h9a2.3 2.3 0 0 0 2-3.4l-5-8.6V3" />
-      <path
-        d="M7.6 15h8.8l1.4 2.6a1 1 0 0 1-.9 1.4H7.1a1 1 0 0 1-.9-1.4z"
-        fill="currentColor"
-        stroke="none"
-      />
-    </>
-  ),
 };
 
 export function ClimateIcon({
@@ -127,7 +117,7 @@ const EQUIPMENT_PATHS: Record<EquipmentKind, ReactNode> = {
       <path d="M12 2.8a6 6 0 0 0-3.6 10.8c.6.5 1 1.3 1 2.1V16h5.2v-.3c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 2.8z" />
     </>
   ),
-  fertigation: (
+  irrigation: (
     <>
       <path d="M3 6h9a3 3 0 0 1 3 3v2" />
       <path d="M13 11h4" />

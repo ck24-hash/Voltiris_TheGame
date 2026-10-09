@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatClimate,
+  formatClimateRange,
   formatCoins,
   formatCoinsLong,
   formatDayTime,
@@ -107,7 +108,13 @@ describe('climate and percentages', () => {
     expect(formatClimate('co2', 420)).toBe('420 ppm');
     expect(formatClimate('light', 400.4)).toBe('400 PAR');
     expect(formatClimate('humidity', 70)).toBe('70%');
-    expect(formatClimate('nutrients', 2.5)).toBe('2.5 EC');
+  });
+
+  it('shows ranges without needless decimals', () => {
+    expect(formatClimateRange('temperature', 22, 28)).toBe('22–28 °C');
+    expect(formatClimateRange('temperature', 22.4, 25.6)).toBe('22.4–25.6 °C');
+    expect(formatClimateRange('co2', 600, 1000)).toBe('600–1000 ppm');
+    expect(formatClimateRange('humidity', 70, 85)).toBe('70–85%');
   });
 
   it('rounds percentages', () => {
