@@ -4,7 +4,7 @@
 export interface DevFlags {
   /** Game time multiplier; 1 is normal speed. */
   readonly speed: number;
-  /** Shows the FPS meter and the equipment shape preview. */
+  /** Shows the FPS meter. */
   readonly debug: boolean;
 }
 

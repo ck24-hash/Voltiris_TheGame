@@ -141,13 +141,7 @@ export type SceneItem =
   | { readonly kind: 'fence'; readonly segment: FenceSegment }
   | { readonly kind: 'building'; readonly building: Building }
   | { readonly kind: 'greenhouse' }
-  | { readonly kind: 'sign'; readonly tile: GridPoint }
-  /** Debug preview of an equipment shape, by index. */
-  | {
-      readonly kind: 'equipment';
-      readonly index: number;
-      readonly tile: GridPoint;
-    };
+  | { readonly kind: 'sign'; readonly tile: GridPoint };
 
 const STANDING_SIZE: Record<StandingKind, number> = {
   tree: 0.5,
@@ -177,7 +171,6 @@ function itemBox(item: SceneItem, layout: SceneLayout): Box {
     case 'greenhouse':
       return footprintBox(layout.greenhouse);
     case 'sign':
-    case 'equipment':
       return boxAround(item.tile.i + 0.5, item.tile.j + 0.5, 0.4);
   }
 }
@@ -186,7 +179,6 @@ function itemBox(item: SceneItem, layout: SceneLayout): Box {
 export function sceneItems(
   layout: SceneLayout,
   standing: readonly Scenery<StandingKind>[],
-  equipmentCount = 0,
 ): SceneItem[] {
   const items: SceneItem[] = [
     { kind: 'greenhouse' },
@@ -200,11 +192,6 @@ export function sceneItems(
       segment,
     })),
     ...standing.map((scenery) => ({ kind: 'scenery' as const, scenery })),
-    ...Array.from({ length: equipmentCount }, (_, index) => ({
-      kind: 'equipment' as const,
-      index,
-      tile: { i: layout.lot.i + layout.lot.width - 4 + index, j: layout.lot.j },
-    })),
   ];
   return sortForDrawing(items, (item) => itemBox(item, layout));
 }

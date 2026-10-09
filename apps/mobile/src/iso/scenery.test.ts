@@ -68,7 +68,7 @@ describe('fence', () => {
 });
 
 describe('sceneItems', () => {
-  const items = sceneItems(layout, scatterScenery(layout).standing, 4);
+  const items = sceneItems(layout, scatterScenery(layout).standing);
   const indexOf = (match: (item: (typeof items)[number]) => boolean) =>
     items.findIndex(match);
 
@@ -78,8 +78,7 @@ describe('sceneItems', () => {
       layout.buildings.length +
       layout.forSale.length +
       fenceSegments(layout).length +
-      scatterScenery(layout).standing.length +
-      4;
+      scatterScenery(layout).standing.length;
     expect(items).toHaveLength(expected);
   });
 

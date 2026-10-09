@@ -1,25 +1,24 @@
 // Phase 5 "Done when": the first loop (plant, harvest, sell) is quick and
 // pays, and the crops' timings and earnings follow the design.
 
-import {
-  CROP_IDS,
-  defaultContent,
-  type CropId,
-  type GameContent,
-} from '@voltiris/content';
+import { CROP_IDS, defaultContent, type CropId } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { createManualClock } from './clock';
 import { applyCommand, type Command } from './commands';
-import { growthRate, stressRate } from './growth';
 import { cropPrice, initialMarket } from './market';
 import { createGame } from './newGame';
 import type { GameState } from './state';
 import { stockOf } from './storage';
-import { firstGreenhouse, TEST_PLAYER_ID } from './test-utils';
+import {
+  firstGreenhouse,
+  growCrop,
+  newTestGame,
+  TEST_PLAYER_ID,
+} from './test-utils';
 import { advance } from './tick';
 
 const content = defaultContent;
-const { crops, time, care } = content;
+const { crops, time } = content;
 const MINUTE = 60_000;
 
 /** Real minutes each crop should take in the starting greenhouse. */
@@ -32,23 +31,18 @@ const TARGET_MINUTES: Record<CropId, number> = {
 };
 
 /**
- * One plot of a crop in the starting greenhouse at the start of the game:
- * how long it takes and what it earns, after seeds and the water and
- * nutrients it uses.
+ * A starting greenhouse full of one crop, with no equipment: how long the
+ * crop takes and what one plot earns at the opening prices, after seeds and
+ * its share of the water and nutrients.
  */
-function economics(id: CropId, c: GameContent = content) {
-  const crop = c.crops[id];
-  const climate = c.startingGreenhouse.climate;
-  const rate = growthRate(climate, crop);
-  const ticks = Math.ceil(crop.growthHours / rate);
-  const quality =
-    1 / (1 + c.growth.stressQualityPenalty * stressRate(climate, crop));
-  const price = cropPrice(initialMarket(), id, 0, c);
-  const careCost =
-    (crop.growthHours * crop.waterUse * care.water.cost) / care.water.amount +
-    (crop.growthHours * crop.nutrientUse * care.nutrients.cost) /
-      care.nutrients.amount;
-  const profit = crop.yieldPerPlot * price * quality - crop.seedCost - careCost;
+function economics(id: CropId) {
+  const crop = crops[id];
+  const start = newTestGame();
+  const plots = firstGreenhouse(start).plots.length;
+  const { ticks, quality, careCost } = growCrop(start, id);
+  const price = cropPrice(initialMarket(), id, 0, content);
+  const profit =
+    crop.yieldPerPlot * price * quality - crop.seedCost - careCost / plots;
   const minutes = (ticks * time.realMsPerTick) / MINUTE;
   return { minutes, profit, perHour: (profit / minutes) * 60 };
 }

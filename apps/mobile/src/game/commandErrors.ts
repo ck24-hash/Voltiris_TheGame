@@ -7,6 +7,9 @@ const MESSAGES: Partial<Record<CommandErrorCode, string>> = {
   ALREADY_FULL: 'It cannot hold any more.',
   NOT_ENOUGH_STOCK: 'There is not that much in storage.',
   NOT_READY: 'Still growing.',
+  MAX_LEVEL: 'That is already the best there is.',
+  NOT_WORN: 'It is as good as new.',
+  NO_COMPUTER: 'This needs a climate computer.',
 };
 
 export function describeCommandError(error: CommandError): string {

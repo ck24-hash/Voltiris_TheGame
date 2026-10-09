@@ -98,7 +98,7 @@ describe('HUD', () => {
   it('shows the six climate readings, idle while nothing grows', () => {
     renderApp();
     expect(within(badge('Temperature')).getByText('20.0 °C')).toBeDefined();
-    expect(within(badge('Humidity')).getByText('70%')).toBeDefined();
+    expect(within(badge('Humidity')).getByText('60%')).toBeDefined();
     expect(within(badge('CO₂')).getByText('420 ppm')).toBeDefined();
     expect(within(badge('Light')).getByText('400 PAR')).toBeDefined();
     expect(within(badge('Water')).getByText('65%')).toBeDefined();
@@ -321,6 +321,188 @@ describe('buildings', () => {
     tapBuilding('energy');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('greenhouse', () => {
+  function openGreenhouse(store: ReturnType<typeof renderApp>['store']) {
+    act(() => store.getState().openWindow('greenhouse'));
+    return screen.getByRole('dialog', { name: 'Greenhouse' });
+  }
+
+  /** The game with more money, and the first greenhouse changed. */
+  function withGreenhouse(
+    game: GameState,
+    change: Partial<GameState['greenhouses'][number]>,
+    money = game.money,
+  ): GameState {
+    return {
+      ...game,
+      money,
+      greenhouses: game.greenhouses.map((g) => ({ ...g, ...change })),
+    };
+  }
+
+  it('buys a heater that warms the air', async () => {
+    const user = userEvent.setup();
+    const { store, runTicks } = renderApp();
+    runTicks(0);
+    const window = openGreenhouse(store);
+    expect(
+      within(window).getByRole('tab', { name: 'Equipment' }),
+    ).toHaveAttribute('aria-selected', 'true');
+    expect(
+      within(window).getByText('Warms the air when it is too cold.'),
+    ).toBeDefined();
+
+    await user.click(
+      within(window).getByRole('button', {
+        name: 'Buy Heater: Gas heater (150 Volticoins)',
+      }),
+    );
+    expect(screen.getByLabelText('350 Volticoins')).toBeDefined();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Gas heater installed',
+    );
+    expect(within(window).getByText('Gas heater · Level 1 of 3')).toBeDefined();
+    // Heating the 20 °C greenhouse to its 23 °C target takes three quarters
+    // of its output.
+    expect(within(window).getByText(/Heating · 75%/)).toBeDefined();
+
+    await user.click(within(window).getByRole('button', { name: 'Close' }));
+    expect(within(badge('Temperature')).getByText('20.0 °C')).toBeDefined();
+    runTicks(10);
+    expect(within(badge('Temperature')).getByText('23.0 °C')).toBeDefined();
+  });
+
+  it('sets the targets the equipment works to', async () => {
+    const user = userEvent.setup();
+    const { store } = renderApp();
+    const { id } = firstGreenhouseOf(store);
+    act(() => {
+      store.getState().buyEquipment(id, 'heater');
+    });
+    const window = openGreenhouse(store);
+    await user.click(within(window).getByRole('tab', { name: 'Climate' }));
+
+    const heatTo = within(window).getByRole('group', { name: 'Heat up to' });
+    expect(within(heatTo).getByText('23.0 °C')).toBeDefined();
+    expect(within(heatTo).getByText('Now 20.0 °C')).toBeDefined();
+    await user.click(within(heatTo).getByRole('button', { name: 'Raise' }));
+    expect(within(heatTo).getByText('24.0 °C')).toBeDefined();
+    expect(firstGreenhouseOf(store).setpoints.heatTo).toBe(24);
+    // Only the equipment that is installed has targets here.
+    expect(
+      within(window).queryByRole('group', { name: 'Keep CO₂ at' }),
+    ).toBeNull();
+  });
+
+  it('lets the climate computer set the targets, or the player', async () => {
+    const user = userEvent.setup();
+    const { store } = renderApp();
+    const game = store.getState().game;
+    act(() =>
+      store.getState().replaceGame(
+        withGreenhouse(game, {
+          equipment: { co2: { level: 1, wear: 0 } },
+          computer: true,
+          auto: true,
+        }),
+      ),
+    );
+    const window = openGreenhouse(store);
+    await user.click(within(window).getByRole('tab', { name: 'Climate' }));
+
+    const toggle = within(window).getByRole('switch', {
+      name: 'Automatic control',
+    });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    const co2 = within(window).getByRole('group', { name: 'Keep CO₂ at' });
+    // Nothing grows, so the computer lets the injector idle.
+    expect(within(co2).getByText('400 ppm')).toBeDefined();
+    expect(within(co2).getByRole('button', { name: 'Raise' })).toBeDisabled();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(within(co2).getByText('800 ppm')).toBeDefined();
+    expect(within(co2).getByRole('button', { name: 'Raise' })).toBeEnabled();
+  });
+
+  it('upgrades the greenhouse itself', async () => {
+    const user = userEvent.setup();
+    const { store } = renderApp();
+    act(() =>
+      store
+        .getState()
+        .replaceGame(withGreenhouse(store.getState().game, {}, 2_000)),
+    );
+    const window = openGreenhouse(store);
+    await user.click(within(window).getByRole('tab', { name: 'Upgrades' }));
+    expect(
+      within(window).getByText('Single glass: 80% light · keeps heat 1.0×'),
+    ).toBeDefined();
+
+    await user.click(
+      within(window).getByRole('button', {
+        name: 'Upgrade Size: Medium (600 Volticoins)',
+      }),
+    );
+    expect(firstGreenhouseOf(store).plots).toHaveLength(6);
+    expect(within(window).getByText('Medium: 6 plots')).toBeDefined();
+
+    await user.click(
+      within(window).getByRole('button', {
+        name: 'Buy Climate computer (600 Volticoins)',
+      }),
+    );
+    expect(firstGreenhouseOf(store)).toMatchObject({
+      computer: true,
+      auto: true,
+    });
+  });
+
+  it('services worn equipment', async () => {
+    const user = userEvent.setup();
+    const { store } = renderApp();
+    act(() =>
+      store.getState().replaceGame(
+        withGreenhouse(store.getState().game, {
+          equipment: { heater: { level: 1, wear: 0.5 } },
+        }),
+      ),
+    );
+    const window = openGreenhouse(store);
+    expect(within(window).getByText(/Wear 50%/)).toBeDefined();
+    // A quarter of the price, for half the wear: 18.75, rounded up.
+    await user.click(
+      within(window).getByRole('button', {
+        name: 'Service Heater (19 Volticoins)',
+      }),
+    );
+    expect(firstGreenhouseOf(store).equipment.heater).toEqual({
+      level: 1,
+      wear: 0,
+    });
+    expect(screen.getByLabelText('481 Volticoins')).toBeDefined();
+  });
+
+  it('says when the equipment is off for want of money', () => {
+    const { store } = renderApp();
+    act(() =>
+      store
+        .getState()
+        .replaceGame(
+          withGreenhouse(
+            store.getState().game,
+            { equipment: { heater: { level: 1, wear: 0 } } },
+            0,
+          ),
+        ),
+    );
+    const window = openGreenhouse(store);
+    expect(within(window).getByRole('alert')).toHaveTextContent(
+      'Not enough Volticoins: the equipment is off.',
+    );
   });
 });
 

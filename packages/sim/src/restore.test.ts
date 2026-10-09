@@ -1,6 +1,7 @@
 import { defaultContent, type GameContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import saveV1 from './fixtures/save-v1.json';
+import saveV2 from './fixtures/save-v2.json';
 import { initialMarket } from './market';
 import {
   migrateState,
@@ -10,12 +11,14 @@ import {
 } from './restore';
 import { STATE_VERSION, type GameState } from './state';
 import {
+  buy,
   deepFreeze,
   harvest,
   newTestGame,
   optimalClimate,
   plant,
   runTicks,
+  STILL_AIR,
   withClimate,
 } from './test-utils';
 
@@ -24,12 +27,29 @@ function jsonCopy(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** Plot 0: a ready cucumber. Plot 2: a growing tomato. One harvest stored. */
+/**
+ * Plot 0: a ready cucumber. Plot 2: a growing tomato. One harvest stored.
+ * A heater that has run a while.
+ */
 function playedGame(): GameState {
-  const game = withClimate(newTestGame(), optimalClimate('cucumber'));
-  const first = runTicks(plant(plant(game, 'cucumber', 0), 'tomato', 2), 30);
-  return runTicks(plant(harvest(first, 0), 'cucumber', 0), 30);
+  const game = buy(
+    withClimate(newTestGame(), optimalClimate('cucumber')),
+    'heater',
+  );
+  const run = (state: GameState) => runTicks(state, 30, STILL_AIR);
+  const first = run(plant(plant(game, 'cucumber', 0), 'tomato', 2));
+  return run(plant(harvest(first, 0), 'cucumber', 0));
 }
+
+/** What a greenhouse from before Phase 6 gets. */
+const PHASE_5_GREENHOUSE = {
+  glass: 1,
+  size: 1,
+  equipment: {},
+  setpoints: defaultContent.control.initial,
+  computer: false,
+  auto: false,
+};
 
 type Path = readonly (string | number)[];
 const REMOVE = Symbol('remove');
@@ -81,11 +101,37 @@ describe('restoreGame', () => {
     ]);
     expect(result.state.storage).toEqual({ lots: [] });
     expect(result.state.market).toEqual(initialMarket());
+    expect(result.state.owed).toBe(0);
+    expect(result.state.greenhouses[0]).toMatchObject(PHASE_5_GREENHOUSE);
+  });
+
+  it('still loads a version 2 save, with a bare greenhouse and nothing owed', () => {
+    const result = restoreGame(saveV2, defaultContent);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.fromVersion).toBe(2);
+    expect(result.state.version).toBe(STATE_VERSION);
+    expect(result.state.money).toBe(742);
+    expect(result.state.owed).toBe(0);
+    const [greenhouse] = result.state.greenhouses;
+    expect(greenhouse).toMatchObject(PHASE_5_GREENHOUSE);
+    expect(greenhouse?.climate.water).toBe(48.5);
+    expect(greenhouse?.plots.map((p) => p.planting?.cropId ?? null)).toEqual([
+      'strawberry',
+      'microgreens',
+      null,
+      null,
+    ]);
+    expect(result.state.storage.lots).toHaveLength(1);
+    expect(result.state.market.swings.strawberry).toBe(1.12);
   });
 
   it('drops unknown extra fields', () => {
     const withExtras = editedSave(['greenhouses', 0, 'plots', 0, 'extra'], 1);
     (withExtras as Record<string, unknown>).cheat = true;
+    const greenhouse = (
+      withExtras as { greenhouses: { equipment: Record<string, unknown> }[] }
+    ).greenhouses[0];
+    if (greenhouse) greenhouse.equipment.laser = { level: 1, wear: 0 };
     expect(restoreGame(withExtras, defaultContent)).toMatchObject({
       ok: true,
       state: playedGame(),
@@ -142,6 +188,17 @@ describe('restoreGame', () => {
     [['market', 'swings'], [], 'an object'],
     [['market', 'swings', 'strawberry'], REMOVE, 'a number'],
     [['market', 'swings', 'tomato'], 0, 'a number above 0'],
+    [['owed'], REMOVE, 'a number from 0 up'],
+    [['owed'], 1, 'below 1'],
+    [['greenhouses', 0, 'glass'], 0, 'a number from 1 up'],
+    [['greenhouses', 0, 'glass'], 4, 'at most 3'],
+    [['greenhouses', 0, 'size'], 1.5, 'a whole number'],
+    [['greenhouses', 0, 'equipment'], null, 'an object'],
+    [['greenhouses', 0, 'equipment', 'heater', 'level'], 4, 'at most 3'],
+    [['greenhouses', 0, 'equipment', 'heater', 'wear'], 2, 'at most 1'],
+    [['greenhouses', 0, 'setpoints', 'co2'], 'high', 'a number'],
+    [['greenhouses', 0, 'computer'], 'yes', 'true or false'],
+    [['greenhouses', 0, 'auto'], true, 'false without a computer'],
   ])('rejects a bad %j, naming the field', (path, value, expected) => {
     const result = restoreGame(editedSave(path, value), defaultContent);
     expect(result).toEqual({

@@ -1,4 +1,9 @@
-import type { CropId, GameContent } from '@voltiris/content';
+import type {
+  CropId,
+  EquipmentKind,
+  GameContent,
+  SetpointId,
+} from '@voltiris/content';
 import {
   applyCommand,
   catchUp,
@@ -8,13 +13,14 @@ import {
   type CommandError,
   type CommandMeta,
   type GameState,
+  type GreenhouseUpgrade,
 } from '@voltiris/sim';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { BuildingId } from '../iso/layout';
 import { pageLifecycle } from './lifecycle';
 
-/** Windows opened from the buildings on the map, plus settings. */
-type GameWindow = BuildingId | 'settings';
+/** Windows opened from the greenhouse and the buildings on the map, plus settings. */
+type GameWindow = BuildingId | 'greenhouse' | 'settings';
 
 /** Where the plot bubble points, in screen pixels of the game view. */
 export interface BubbleAnchor {
@@ -71,6 +77,28 @@ export interface GameStore {
     plotId: string,
   ) => CommandError | null;
   readonly sellCrop: (cropId: CropId, units: number) => CommandError | null;
+  /** Installs a device, or upgrades it to its next level. */
+  readonly buyEquipment: (
+    greenhouseId: string,
+    kind: EquipmentKind,
+  ) => CommandError | null;
+  readonly serviceEquipment: (
+    greenhouseId: string,
+    kind: EquipmentKind,
+  ) => CommandError | null;
+  readonly setSetpoint: (
+    greenhouseId: string,
+    setpoint: SetpointId,
+    value: number,
+  ) => CommandError | null;
+  readonly setAutoControl: (
+    greenhouseId: string,
+    auto: boolean,
+  ) => CommandError | null;
+  readonly upgradeGreenhouse: (
+    greenhouseId: string,
+    upgrade: GreenhouseUpgrade,
+  ) => CommandError | null;
   readonly selectPlot: (selection: PlotSelection | null) => void;
   readonly openWindow: (window: GameWindow) => void;
   readonly closeWindow: () => void;
@@ -164,6 +192,42 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
 
       sellCrop: (cropId, units) =>
         run((meta) => ({ ...meta, type: 'SellCrop', cropId, units })),
+
+      buyEquipment: (greenhouseId, kind) =>
+        run((meta) => ({ ...meta, type: 'BuyEquipment', greenhouseId, kind })),
+
+      serviceEquipment: (greenhouseId, kind) =>
+        run((meta) => ({
+          ...meta,
+          type: 'ServiceEquipment',
+          greenhouseId,
+          kind,
+        })),
+
+      setSetpoint: (greenhouseId, setpoint, value) =>
+        run((meta) => ({
+          ...meta,
+          type: 'SetSetpoint',
+          greenhouseId,
+          setpoint,
+          value,
+        })),
+
+      setAutoControl: (greenhouseId, auto) =>
+        run((meta) => ({
+          ...meta,
+          type: 'SetAutoControl',
+          greenhouseId,
+          auto,
+        })),
+
+      upgradeGreenhouse: (greenhouseId, upgrade) =>
+        run((meta) => ({
+          ...meta,
+          type: 'UpgradeGreenhouse',
+          greenhouseId,
+          upgrade,
+        })),
 
       selectPlot: (selection) => {
         set({ selection });

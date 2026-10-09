@@ -1,9 +1,9 @@
 import type {
   CareConfig,
   EconomyConfig,
+  EnergyPricesConfig,
   GrowthConfig,
   MarketConfig,
-  StartingGreenhouseConfig,
   StorageConfig,
   TimeConfig,
 } from './types';
@@ -14,18 +14,6 @@ export const TIME: TimeConfig = {
   realMsPerTick: 15_000,
   daysPerSeason: 15,
   maxCatchUpMs: 24 * 60 * 60 * 1000,
-};
-
-export const STARTING_GREENHOUSE: StartingGreenhouseConfig = {
-  plots: 4,
-  climate: {
-    temperature: 20,
-    humidity: 70,
-    co2: 420,
-    light: 400,
-    water: 65,
-    nutrients: 2.5,
-  },
 };
 
 export const ECONOMY: EconomyConfig = {
@@ -51,4 +39,9 @@ export const MARKET: MarketConfig = {
   volatility: 0.03,
   minSwing: 0.6,
   maxSwing: 1.6,
+};
+
+export const ENERGY_PRICES: EnergyPricesConfig = {
+  gas: 0.06,
+  power: 0.12,
 };

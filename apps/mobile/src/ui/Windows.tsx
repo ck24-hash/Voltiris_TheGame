@@ -10,6 +10,7 @@ import { CROP_ICONS } from '../game/selectors';
 import { BUILDING_INFO } from './buildingInfo';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
+import { GreenhouseWindow } from './GreenhouseWindow';
 import { ConeIcon } from './icons';
 import { MarketWindow } from './MarketWindow';
 import { SettingsWindow } from './SettingsWindow';
@@ -26,6 +27,8 @@ export function Windows() {
       return null;
     case 'settings':
       return <SettingsWindow />;
+    case 'greenhouse':
+      return <GreenhouseWindow />;
     case 'market':
       return <MarketWindow />;
     case 'storage':

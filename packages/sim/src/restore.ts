@@ -1,14 +1,20 @@
 import {
   CLIMATE_VARIABLES,
   CROP_IDS,
+  EQUIPMENT_KINDS,
+  SETPOINT_IDS,
   type Climate,
   type CropId,
+  type EquipmentKind,
   type GameContent,
+  type Setpoints,
 } from '@voltiris/content';
 import {
   STATE_VERSION,
+  type Equipment,
   type GameState,
   type Greenhouse,
+  type InstalledEquipment,
   type Market,
   type Planting,
   type Plot,
@@ -46,6 +52,37 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
         pepper: 1,
       },
     },
+  }),
+  // Phase 6: greenhouses with the first glass and size, no equipment and the
+  // starting setpoints; nothing owed.
+  2: (old) => ({
+    ...old,
+    version: 3,
+    owed: 0,
+    greenhouses: Array.isArray(old.greenhouses)
+      ? old.greenhouses.map((greenhouse: unknown) =>
+          isRecord(greenhouse)
+            ? {
+                ...greenhouse,
+                glass: 1,
+                size: 1,
+                equipment: {},
+                setpoints: {
+                  heatTo: 23,
+                  ventAbove: 25,
+                  humidityMax: 85,
+                  humidityMin: 75,
+                  co2: 800,
+                  light: 500,
+                  water: 65,
+                  nutrients: 2.5,
+                },
+                computer: false,
+                auto: false,
+              }
+            : greenhouse,
+        )
+      : old.greenhouses,
   }),
 };
 
@@ -191,6 +228,18 @@ function wholeNumber(value: unknown, path: string, min: number): number {
   return n;
 }
 
+/** A level that the content has: 1 up to the number of levels. */
+function level(value: unknown, path: string, levels: number): number {
+  const n = wholeNumber(value, path, 1);
+  if (n > levels) invalid(path, `at most ${levels}`);
+  return n;
+}
+
+function bool(value: unknown, path: string): boolean {
+  if (typeof value !== 'boolean') invalid(path, 'true or false');
+  return value;
+}
+
 function uint32(value: unknown, path: string): number {
   const n = wholeNumber(value, path, 0);
   if (n >= 2 ** 32) invalid(path, 'an unsigned 32-bit integer');
@@ -219,12 +268,19 @@ function readGameState(raw: RawState, content: GameContent): GameState {
       state: uint32(rng.state, 'rng.state'),
     },
     money: number(raw.money, 'money'),
+    owed: owed(raw.owed),
     greenhouses: list(raw.greenhouses, 'greenhouses').map((g, k) =>
       readGreenhouse(g, `greenhouses[${k}]`, content),
     ),
     storage: readStorage(raw.storage, content),
     market: readMarket(raw.market),
   };
+}
+
+function owed(value: unknown): number {
+  const n = number(value, 'owed', 0);
+  if (n >= 1) invalid('owed', 'below 1');
+  return n;
 }
 
 function readStorage(raw: unknown, content: GameContent): Storage {
@@ -268,6 +324,10 @@ function readGreenhouse(
 ): Greenhouse {
   const greenhouse = record(raw, path);
   const climate = record(greenhouse.climate, `${path}.climate`);
+  const setpoints = record(greenhouse.setpoints, `${path}.setpoints`);
+  const computer = bool(greenhouse.computer, `${path}.computer`);
+  const auto = bool(greenhouse.auto, `${path}.auto`);
+  if (auto && !computer) invalid(`${path}.auto`, 'false without a computer');
   return {
     id: text(greenhouse.id, `${path}.id`),
     climate: Object.fromEntries(
@@ -279,7 +339,52 @@ function readGreenhouse(
     plots: list(greenhouse.plots, `${path}.plots`).map((p, k) =>
       readPlot(p, `${path}.plots[${k}]`, content),
     ),
+    glass: level(
+      greenhouse.glass,
+      `${path}.glass`,
+      content.greenhouse.glass.length,
+    ),
+    size: level(
+      greenhouse.size,
+      `${path}.size`,
+      content.greenhouse.sizes.length,
+    ),
+    equipment: readEquipment(
+      greenhouse.equipment,
+      `${path}.equipment`,
+      content,
+    ),
+    setpoints: Object.fromEntries(
+      SETPOINT_IDS.map((id) => [
+        id,
+        number(setpoints[id], `${path}.setpoints.${id}`),
+      ]),
+    ) as Setpoints,
+    computer,
+    auto,
   };
+}
+
+function readEquipment(
+  raw: unknown,
+  path: string,
+  content: GameContent,
+): InstalledEquipment {
+  const equipment = record(raw, path);
+  const installed: Partial<Record<EquipmentKind, Equipment>> = {};
+  for (const kind of EQUIPMENT_KINDS) {
+    if (equipment[kind] === undefined) continue;
+    const device = record(equipment[kind], `${path}.${kind}`);
+    installed[kind] = {
+      level: level(
+        device.level,
+        `${path}.${kind}.level`,
+        content.equipment.levels[kind].length,
+      ),
+      wear: fraction(device.wear, `${path}.${kind}.wear`),
+    };
+  }
+  return installed;
 }
 
 function readPlot(raw: unknown, path: string, content: GameContent): Plot {

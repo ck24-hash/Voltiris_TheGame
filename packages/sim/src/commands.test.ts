@@ -14,6 +14,7 @@ import {
   plant,
   plantingAt,
   runTicks,
+  STILL_AIR,
   withClimate,
 } from './test-utils';
 
@@ -177,7 +178,7 @@ describe('HarvestCrop', () => {
   /** A ready cucumber in plot 0, picked at hour 30. */
   function readyCucumber(): GameState {
     const game = withClimate(newTestGame(), optimalClimate('cucumber'));
-    return runTicks(plant(game, 'cucumber'), 30);
+    return runTicks(plant(game, 'cucumber'), 30, STILL_AIR);
   }
 
   function harvestCommand(state: GameState, plotIndex = 0): Command {
@@ -213,7 +214,7 @@ describe('HarvestCrop', () => {
   it('gives each harvest its own id from the seeded rng', () => {
     let state = readyCucumber();
     state = harvest(state);
-    state = runTicks(plant(state, 'cucumber'), 30);
+    state = runTicks(plant(state, 'cucumber'), 30, STILL_AIR);
     const twice = harvest(state);
     const [first, second] = twice.storage.lots;
     expect(first?.id).not.toBe(second?.id);
@@ -264,7 +265,7 @@ describe('SellCrop', () => {
   /** 12 cucumbers in storage, harvested at hour 30. */
   function stocked(): GameState {
     const game = withClimate(newTestGame(), optimalClimate('cucumber'));
-    return harvest(runTicks(plant(game, 'cucumber'), 30));
+    return harvest(runTicks(plant(game, 'cucumber'), 30, STILL_AIR));
   }
 
   function sellCommand(cropId: CropId, units: number): Command {
@@ -287,7 +288,7 @@ describe('SellCrop', () => {
   it.each([
     ['INVALID_AMOUNT', 'cucumber', 0],
     ['INVALID_AMOUNT', 'cucumber', 1.5],
-    ['NOT_ENOUGH_STOCK', 'cucumber', 13],
+    ['NOT_ENOUGH_STOCK', 'cucumber', crops.cucumber.yieldPerPlot + 1],
     ['NOT_ENOUGH_STOCK', 'tomato', 1],
     ['UNKNOWN_CROP', 'banana', 1],
   ] as const)('rejects with %s (%s × %d)', (code, cropId, units) => {
@@ -301,8 +302,10 @@ describe('SellCrop', () => {
 describe('every command', () => {
   it('leaves the input state untouched', () => {
     const game = withClimate(newTestGame(), optimalClimate('cucumber'));
-    const ready = deepFreeze(runTicks(plant(game, 'cucumber'), 30));
-    const stored = deepFreeze(harvest(runTicks(plant(game, 'cucumber'), 30)));
+    const ready = deepFreeze(runTicks(plant(game, 'cucumber'), 30, STILL_AIR));
+    const stored = deepFreeze(
+      harvest(runTicks(plant(game, 'cucumber'), 30, STILL_AIR)),
+    );
     const greenhouseId = firstGreenhouse(ready).id;
     const plotId = firstGreenhouse(ready).plots[0]?.id ?? '';
     const meta = { id: 'cmd-1', issuedAt: 0 };

@@ -1,8 +1,4 @@
-import {
-  CLIMATE_VARIABLES,
-  defaultContent,
-  type Climate,
-} from '@voltiris/content';
+import { defaultContent } from '@voltiris/content';
 import { createGame, type Clock, type GameState } from '@voltiris/sim';
 import { IDBFactory, IDBKeyRange } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -23,21 +19,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A new game whose greenhouse is perfect for tomatoes. */
-function newTomatoGame(clock: Clock): GameState {
-  const game = createGame({ playerId: 'player', seed: 3 }, content, clock);
-  const bands = content.crops.tomato.climate;
-  const climate = Object.fromEntries(
-    CLIMATE_VARIABLES.map((v) => [
-      v,
-      (bands[v].optimalLow + bands[v].optimalHigh) / 2,
-    ]),
-  ) as Climate;
-  const [greenhouse] = game.greenhouses;
-  if (!greenhouse) throw new Error('no greenhouse');
-  return { ...game, greenhouses: [{ ...greenhouse, climate }] };
-}
-
 function storeFor(game: GameState, clock: Clock) {
   let id = 0;
   return createGameStore({ content, clock, newId: () => `cmd-${++id}`, game });
@@ -53,9 +34,12 @@ describe('closing and reopening the app', () => {
     const db = { indexedDB: new IDBFactory(), IDBKeyRange };
     const app = createFakeLifecycle();
 
-    // Session 1: plant a tomato and microgreens, play for 10 minutes and
-    // harvest the microgreens.
-    const first = storeFor(newTomatoGame(clock), clock);
+    // Session 1: buy a heater, plant a tomato and microgreens, play for 10
+    // minutes and harvest the microgreens.
+    const first = storeFor(
+      createGame({ playerId: 'player', seed: 3 }, content, clock),
+      clock,
+    );
     const stopLoop = startGameLoop(first, { lifecycle: app.lifecycle });
     const autosave = startAutosave({
       store: first,
@@ -65,7 +49,8 @@ describe('closing and reopening the app', () => {
     });
     const greenhouseId = first.getState().game.greenhouses[0]?.id ?? '';
     const [tomato, greens] = first.getState().game.greenhouses[0]?.plots ?? [];
-    const { plantCrop, harvestCrop } = first.getState();
+    const { buyEquipment, plantCrop, harvestCrop } = first.getState();
+    expect(buyEquipment(greenhouseId, 'heater')).toBeNull();
     expect(plantCrop(greenhouseId, tomato?.id ?? '', 'tomato')).toBeNull();
     expect(plantCrop(greenhouseId, greens?.id ?? '', 'microgreens')).toBeNull();
     await vi.advanceTimersByTimeAsync(10 * MINUTE);
@@ -100,9 +85,13 @@ describe('closing and reopening the app', () => {
     const { game, away } = second.getState();
     expect(game).toEqual(twin.getState().game);
     expect(game.clock.gameHour).toBe(40 + 480);
-    // The tomato ripened while the player was away (it needs exactly its
-    // growth hours in a perfect climate); the microgreens left in storage
-    // went off.
+    // The heater kept running and was paid for.
+    expect(game.money).toBeLessThan(closedGame.money);
+    // The tomato ripened while the player was away; the microgreens left in
+    // storage went off.
+    const ripe = game.greenhouses[0]?.plots[0]?.planting;
+    if (ripe?.status !== 'ready') throw new Error('expected a ripe tomato');
+    expect(ripe.readyAtHour).toBeGreaterThan(40);
     expect(away).toEqual({
       awayMs: 2 * HOUR,
       ticks: 480,
@@ -112,8 +101,8 @@ describe('closing and reopening the app', () => {
           greenhouseId,
           plotId: tomato?.id,
           cropId: 'tomato',
-          readyAtHour: content.crops.tomato.growthHours,
-          quality: 1,
+          readyAtHour: ripe.readyAtHour,
+          quality: ripe.quality,
           yieldUnits: content.crops.tomato.yieldPerPlot,
         },
       ],
@@ -123,7 +112,7 @@ describe('closing and reopening the app', () => {
           units: content.crops.microgreens.yieldPerPlot,
         },
       ],
-      moneyChange: 0,
+      moneyChange: game.money - closedGame.money,
     });
   });
 });

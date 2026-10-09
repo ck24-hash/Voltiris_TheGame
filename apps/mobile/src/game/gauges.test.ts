@@ -41,6 +41,13 @@ describe('readGauge', () => {
     });
   });
 
+  it('judges the value as it is shown', () => {
+    // Cucumbers want 22 °C or more; 21.98 °C shows as "22.0 °C".
+    expect(readGauge('temperature', 21.98, [cucumber]).status).toBe('good');
+    expect(readGauge('temperature', 21.94, [cucumber]).status).toBe('warn');
+    expect(readGauge('humidity', 69.6, [cucumber]).status).toBe('good');
+  });
+
   it('judges by the crop that is worst off', () => {
     // 20 °C is fine for tomato (18–26) but cold for cucumber (22–28).
     expect(readGauge('temperature', 20, [tomato]).status).toBe('good');

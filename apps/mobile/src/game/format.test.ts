@@ -5,7 +5,9 @@ import {
   formatCoinsLong,
   formatDayTime,
   formatGameHours,
+  formatKw,
   formatPercent,
+  formatPerDay,
   formatPrice,
   formatDuration,
   formatRealDuration,
@@ -28,6 +30,17 @@ describe('money', () => {
   it('keeps cents on unit prices', () => {
     expect(formatPrice(1.6)).toBe('1.60');
     expect(formatPrice(2.4)).toBe('2.40');
+  });
+
+  it('shows running costs per game day, from the cost per hour', () => {
+    expect(formatPerDay(0)).toBe('0.0');
+    expect(formatPerDay(0.1125)).toBe('2.7');
+    expect(formatPerDay(0.625)).toBe('15');
+  });
+
+  it('shows power in kW', () => {
+    expect(formatKw(3.2)).toBe('3.2 kW');
+    expect(formatKw(0)).toBe('0.0 kW');
   });
 });
 

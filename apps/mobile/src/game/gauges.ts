@@ -71,23 +71,29 @@ export interface GaugeReading {
   readonly note: string;
 }
 
-/** How a climate value suits the crops currently growing, judged by the worst-off crop. */
+/**
+ * How a climate value suits the crops currently growing, judged by the
+ * worst-off crop. The value is judged as shown (rounded to the gauge's
+ * precision), so a gauge never reads "22.0 °C, too cold" for a crop that
+ * wants 22 °C.
+ */
 export function readGauge(
   variable: ClimateVariable,
   value: number,
   growingCrops: readonly CropDef[],
 ): GaugeReading {
   const gauge = GAUGES[variable];
+  const shown = Number(value.toFixed(gauge.decimals));
   let worst: { crop: CropDef; factor: number } | null = null;
   for (const crop of growingCrops) {
-    const factor = climateFactor(value, crop.climate[variable]);
+    const factor = climateFactor(shown, crop.climate[variable]);
     if (!worst || factor < worst.factor) worst = { crop, factor };
   }
 
   if (!worst) return { status: 'idle', note: 'No crops' };
   if (worst.factor >= 1) return { status: 'good', note: 'Good' };
 
-  const tooLow = value < worst.crop.climate[variable].optimalLow;
+  const tooLow = shown < worst.crop.climate[variable].optimalLow;
   return {
     status: worst.factor === 0 ? 'bad' : 'warn',
     note: tooLow ? gauge.low : gauge.high,

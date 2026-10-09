@@ -1,24 +1,60 @@
-import type { GameContent } from '@voltiris/content';
+import {
+  EQUIPMENT_KINDS,
+  type EquipmentKind,
+  type GameContent,
+} from '@voltiris/content';
+import {
+  nextClimate,
+  planClimate,
+  plantActivity,
+  type ClimatePlan,
+} from './climate';
 import type { Clock } from './clock';
+import { equipmentLevel } from './equipment';
 import { growPlanting } from './growth';
 import { tickMarket } from './market';
 import { createRng } from './rng';
-import type { GameState, Greenhouse, Plot } from './state';
+import type {
+  Equipment,
+  GameState,
+  Greenhouse,
+  InstalledEquipment,
+  Plot,
+} from './state';
 import { removeSpoiled } from './storage';
 import { ticksDue } from './time';
 
-/** Advances the game by exactly one tick (one in-game hour). */
+/**
+ * Advances the game by exactly one tick (one in-game hour). Each greenhouse's
+ * equipment runs only while the player's money covers everything owed:
+ * whole Volticoins are paid every hour, and the fractions carry over.
+ */
 export function tick(state: GameState, content: GameContent): GameState {
   const gameHour = state.clock.gameHour + 1;
   const rng = createRng(state.rng);
   const market = tickMarket(state.market, rng, content.market);
+  let { money, owed } = state;
+  const greenhouses = state.greenhouses.map((greenhouse) => {
+    const activity = plantActivity(greenhouse, content);
+    let plan = planClimate(greenhouse, activity, content);
+    const due = owed + plan.cost;
+    if (due > money) {
+      // Not enough money: the equipment stays off this hour.
+      plan = planClimate(greenhouse, activity, content, false);
+    } else {
+      const pay = Math.floor(due);
+      money -= pay;
+      owed = due - pay;
+    }
+    return tickGreenhouse(greenhouse, plan, gameHour, content);
+  });
   return {
     ...state,
     clock: { ...state.clock, gameHour },
     rng: rng.snapshot(),
-    greenhouses: state.greenhouses.map((greenhouse) =>
-      tickGreenhouse(greenhouse, gameHour, content),
-    ),
+    money,
+    owed,
+    greenhouses,
     storage: removeSpoiled(state.storage, gameHour, content),
     market,
   };
@@ -64,43 +100,55 @@ export function maxCatchUpTicks(content: GameContent): number {
 }
 
 /**
- * Grows every crop in the greenhouse by one tick, in the climate at the start
- * of the tick. Crops then take up water and nutrients in proportion to how
- * much they grew, so a crop that has stopped growing uses none.
+ * One hour in a greenhouse: crops grow in the climate at the start of the
+ * hour, then the air moves toward the plan's balance, the plants drink
+ * (a crop that has stopped growing drinks nothing) and the equipment that ran
+ * wears a little.
  */
 function tickGreenhouse(
   greenhouse: Greenhouse,
+  plan: ClimatePlan,
   gameHour: number,
   content: GameContent,
 ): Greenhouse {
-  let waterUsed = 0;
-  let nutrientsUsed = 0;
   const plots = greenhouse.plots.map((plot): Plot => {
     const { planting } = plot;
     if (planting?.status !== 'growing') return plot;
-    const crop = content.crops[planting.cropId];
-    const next = growPlanting(
-      planting,
-      greenhouse.climate,
-      crop,
-      gameHour,
-      content.growth,
-    );
-    const grown = next.growthHours - planting.growthHours;
-    waterUsed += grown * crop.waterUse;
-    nutrientsUsed += grown * crop.nutrientUse;
-    return { ...plot, planting: next };
+    return {
+      ...plot,
+      planting: growPlanting(
+        planting,
+        greenhouse.climate,
+        content.crops[planting.cropId],
+        gameHour,
+        content.growth,
+      ),
+    };
   });
-  if (waterUsed === 0 && nutrientsUsed === 0) return { ...greenhouse, plots };
-
-  const { water, nutrients } = greenhouse.climate;
   return {
     ...greenhouse,
-    climate: {
-      ...greenhouse.climate,
-      water: Math.max(0, water - waterUsed),
-      nutrients: Math.max(0, nutrients - nutrientsUsed),
-    },
+    climate: nextClimate(greenhouse.climate, plan, content),
     plots,
+    equipment: wearDown(greenhouse.equipment, plan, content),
   };
+}
+
+/** Devices wear in proportion to how hard they worked. */
+function wearDown(
+  equipment: InstalledEquipment,
+  plan: ClimatePlan,
+  content: GameContent,
+): InstalledEquipment {
+  const next: Partial<Record<EquipmentKind, Equipment>> = { ...equipment };
+  for (const kind of EQUIPMENT_KINDS) {
+    const device = equipment[kind];
+    const load = plan.devices[kind]?.load ?? 0;
+    if (!device || load === 0) continue;
+    const { wearRate } = equipmentLevel(kind, device.level, content);
+    next[kind] = {
+      ...device,
+      wear: Math.min(1, device.wear + wearRate * load),
+    };
+  }
+  return next;
 }

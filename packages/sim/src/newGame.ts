@@ -1,5 +1,6 @@
 import type { GameContent } from '@voltiris/content';
 import type { Clock } from './clock';
+import { levelAt } from './equipment';
 import { initialMarket } from './market';
 import { createRng, seedRng } from './rng';
 import { STATE_VERSION, type GameState, type Greenhouse } from './state';
@@ -17,15 +18,21 @@ export function createGame(
   clock: Clock,
 ): GameState {
   const rng = createRng(seedRng(options.seed));
-  const { plots, climate } = content.startingGreenhouse;
+  const { startingClimate, sizes } = content.greenhouse;
 
   const greenhouse: Greenhouse = {
     id: rng.uuid(),
-    climate: { ...climate },
-    plots: Array.from({ length: plots }, () => ({
+    climate: { ...startingClimate },
+    plots: Array.from({ length: levelAt(sizes, 1).plots }, () => ({
       id: rng.uuid(),
       planting: null,
     })),
+    glass: 1,
+    size: 1,
+    equipment: {},
+    setpoints: { ...content.control.initial },
+    computer: false,
+    auto: false,
   };
 
   return {
@@ -34,6 +41,7 @@ export function createGame(
     clock: { gameHour: 0, lastTickAt: clock.now() },
     rng: rng.snapshot(),
     money: content.economy.startingMoney,
+    owed: 0,
     greenhouses: [greenhouse],
     storage: { lots: [] },
     market: initialMarket(),

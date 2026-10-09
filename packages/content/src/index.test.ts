@@ -1,8 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import { CLIMATE_VARIABLES, CROP_IDS, SEASONS, defaultContent } from './index';
+import {
+  AIR_VARIABLES,
+  CLIMATE_VARIABLES,
+  CROP_IDS,
+  EQUIPMENT_KINDS,
+  EQUIPMENT_SETPOINTS,
+  SEASONS,
+  SETPOINT_IDS,
+  defaultContent,
+} from './index';
 
-const { crops, startingGreenhouse, time, care, storage, market } =
-  defaultContent;
+const {
+  crops,
+  greenhouse,
+  time,
+  care,
+  storage,
+  market,
+  equipment,
+  control,
+  physics,
+} = defaultContent;
+const startingPlots = greenhouse.sizes[0]?.plots ?? 0;
 
 describe('crops', () => {
   it('define exactly the known crop ids', () => {
@@ -50,15 +69,15 @@ describe('crops', () => {
 
 describe('starting greenhouse', () => {
   it('has a positive whole number of plots', () => {
-    expect(Number.isInteger(startingGreenhouse.plots)).toBe(true);
-    expect(startingGreenhouse.plots).toBeGreaterThan(0);
+    expect(Number.isInteger(startingPlots)).toBe(true);
+    expect(startingPlots).toBeGreaterThan(0);
   });
 
   it.each(CROP_IDS)(
     'climate lets %s grow (every variable inside its limits)',
     (id) => {
       for (const variable of CLIMATE_VARIABLES) {
-        const value = startingGreenhouse.climate[variable];
+        const value = greenhouse.startingClimate[variable];
         const r = crops[id].climate[variable];
         expect(value, variable).toBeGreaterThan(r.limitLow);
         expect(value, variable).toBeLessThan(r.limitHigh);
@@ -67,11 +86,125 @@ describe('starting greenhouse', () => {
   );
 });
 
+describe('greenhouse upgrades', () => {
+  it.each([
+    ['glass', greenhouse.glass],
+    ['sizes', greenhouse.sizes],
+  ] as const)(
+    '%s start free at level 1, then cost more each level',
+    (_, levels) => {
+      expect(levels[0]?.price).toBe(0);
+      for (let k = 1; k < levels.length; k++) {
+        expect(Number.isInteger(levels[k]?.price)).toBe(true);
+        expect(levels[k]?.price).toBeGreaterThan(levels[k - 1]?.price ?? 0);
+      }
+    },
+  );
+
+  it('glass lets light through and keeps some heat in', () => {
+    for (const glass of greenhouse.glass) {
+      expect(glass.transmission).toBeGreaterThan(0);
+      expect(glass.transmission).toBeLessThanOrEqual(1);
+      expect(glass.heatLoss).toBeGreaterThan(0);
+      expect(glass.airChanges).toBeGreaterThan(0);
+    }
+  });
+
+  it('sizes add whole rows of two plots', () => {
+    for (let k = 0; k < greenhouse.sizes.length; k++) {
+      const plots = greenhouse.sizes[k]?.plots ?? 0;
+      expect(plots % 2).toBe(0);
+      if (k > 0) {
+        expect(plots).toBeGreaterThan(greenhouse.sizes[k - 1]?.plots ?? 0);
+      }
+    }
+  });
+});
+
+describe('equipment', () => {
+  it.each(EQUIPMENT_KINDS)(
+    '%s has levels that cost whole coins, dearer each level',
+    (kind) => {
+      const levels = equipment.levels[kind];
+      expect(levels.length).toBeGreaterThan(0);
+      let previous = 0;
+      for (const level of levels) {
+        expect(Number.isInteger(level.price)).toBe(true);
+        expect(level.price).toBeGreaterThan(previous);
+        expect(level.wearRate).toBeGreaterThan(0);
+        expect(level.wearRate).toBeLessThan(1);
+        previous = level.price;
+      }
+    },
+  );
+
+  it('loses part of its output when worn, never all of it', () => {
+    expect(equipment.wearLoss).toBeGreaterThan(0);
+    expect(equipment.wearLoss).toBeLessThan(1);
+    expect(equipment.serviceShare).toBeGreaterThan(0);
+  });
+
+  it('burns gas in the first heaters, and the heat pump runs on power', () => {
+    const fuels = equipment.levels.heater.map((level) => level.fuel);
+    expect(fuels).toEqual(['gas', 'gas', 'power']);
+    const pump = equipment.levels.heater[2];
+    expect(pump?.efficiency).toBeGreaterThan(1);
+    expect(pump?.exhaustCo2).toBe(0);
+  });
+});
+
+describe('climate control', () => {
+  it('works to setpoints that every piece of equipment covers', () => {
+    const covered = EQUIPMENT_KINDS.flatMap(
+      (kind) => EQUIPMENT_SETPOINTS[kind],
+    );
+    expect([...covered].sort()).toEqual([...SETPOINT_IDS].sort());
+  });
+
+  it.each(SETPOINT_IDS)('starts %s inside its range', (id) => {
+    const range = control.ranges[id];
+    expect(range.min).toBeLessThan(range.max);
+    expect(range.step).toBeGreaterThan(0);
+    expect(control.initial[id]).toBeGreaterThanOrEqual(range.min);
+    expect(control.initial[id]).toBeLessThanOrEqual(range.max);
+  });
+
+  it('keeps heating below venting, and fogging below venting', () => {
+    const { initial, ranges, temperatureGap, humidityGap } = control;
+    expect(initial.ventAbove - initial.heatTo).toBeGreaterThanOrEqual(
+      temperatureGap,
+    );
+    expect(initial.humidityMax - initial.humidityMin).toBeGreaterThanOrEqual(
+      humidityGap,
+    );
+    // Moving one setpoint pushes its partner, which must stay in range.
+    expect(ranges.heatTo.max + temperatureGap).toBeLessThanOrEqual(
+      ranges.ventAbove.max,
+    );
+    expect(ranges.ventAbove.min - temperatureGap).toBeGreaterThanOrEqual(
+      ranges.heatTo.min,
+    );
+    expect(ranges.humidityMin.max + humidityGap).toBeLessThanOrEqual(
+      ranges.humidityMax.max,
+    );
+    expect(ranges.humidityMax.min - humidityGap).toBeGreaterThanOrEqual(
+      ranges.humidityMin.min,
+    );
+  });
+
+  it('moves the air part of the way to its balance each hour', () => {
+    for (const variable of AIR_VARIABLES) {
+      expect(physics.settle[variable]).toBeGreaterThan(0);
+      expect(physics.settle[variable]).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
 describe('economy', () => {
   it('lets a new player afford a full greenhouse of the dearest seeds', () => {
     const dearest = Math.max(...CROP_IDS.map((id) => crops[id].seedCost));
     expect(defaultContent.economy.startingMoney).toBeGreaterThanOrEqual(
-      dearest * startingGreenhouse.plots,
+      dearest * startingPlots,
     );
   });
 
@@ -90,10 +223,11 @@ describe('economy', () => {
     },
   );
 
-  it('stores a full greenhouse of any crop', () => {
+  it('stores a full greenhouse of any crop, at the largest size', () => {
+    const largest = greenhouse.sizes.at(-1)?.plots ?? 0;
     for (const id of CROP_IDS) {
       expect(storage.capacity).toBeGreaterThanOrEqual(
-        crops[id].yieldPerPlot * startingGreenhouse.plots,
+        crops[id].yieldPerPlot * largest,
       );
     }
   });

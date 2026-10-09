@@ -17,6 +17,8 @@ import {
 const PLOT_COLUMNS = 2;
 /** Height of the greenhouse walls in world pixels. */
 export const WALL_HEIGHT = 110;
+/** How far the roof's ridge rises above the walls. */
+export const ROOF_RISE = 64;
 /** Half the width of a plant's tap area above its tile. */
 export const PLANT_HIT_HALF_WIDTH = 30;
 
@@ -46,12 +48,20 @@ export interface Building {
   readonly height: number;
 }
 
+/** Equipment that stands on the greenhouse floor. */
+type FloorEquipment = 'heater' | 'fertigation' | 'co2' | 'fogger';
+
 export interface SceneLayout {
   /** Land the player owns; the camera stays over it. */
   readonly lot: Footprint;
   readonly greenhouse: Footprint;
   /** Tile of each plot, in the same order as Greenhouse.plots. */
   readonly plots: readonly GridPoint[];
+  /**
+   * Where each floor-standing device goes: along the back walls, behind
+   * every plot, so it never hides a plant.
+   */
+  readonly equipmentSpots: Readonly<Record<FloorEquipment, GridPoint>>;
   readonly buildings: readonly Building[];
   /** The road runs along i forever, between these j values. */
   readonly road: { readonly j0: number; readonly j1: number };
@@ -76,6 +86,12 @@ export function createLayout(plotCount: number): SceneLayout {
       i: greenhouse.i + 1 + (k % PLOT_COLUMNS),
       j: greenhouse.j + 1 + Math.floor(k / PLOT_COLUMNS),
     })),
+    equipmentSpots: {
+      fertigation: { i: greenhouse.i, j: greenhouse.j },
+      heater: { i: greenhouse.i, j: greenhouse.j + 1 },
+      co2: { i: greenhouse.i + 1, j: greenhouse.j },
+      fogger: { i: greenhouse.i + 2, j: greenhouse.j },
+    },
     // Placed so no name tag hangs over another building: the market and the
     // storage barn by the road, the energy shed beside the greenhouse it
     // powers, the town hall at the back. The middle of the front yard stays
@@ -187,12 +203,16 @@ export function plotIndexAt(
 export type WorldTarget =
   | { readonly kind: 'plot'; readonly index: number }
   | { readonly kind: 'building'; readonly id: BuildingId }
+  | { readonly kind: 'greenhouse' }
   | { readonly kind: 'forSale' };
 
 /** Half the size of a "For sale" sign's tap area, around its board. */
 const SIGN_HIT = { halfWidth: 46, top: 72, bottom: 10 } as const;
 
-/** What a tap at a world point lands on: a plot, a building or a sign. */
+/**
+ * What a tap at a world point lands on: a plot, a building, the greenhouse
+ * around the plots, or a sign.
+ */
 export function targetAt(
   layout: SceneLayout,
   p: Point,
@@ -210,6 +230,10 @@ export function targetAt(
     }
   }
 
+  if (insidePolygon(p, greenhouseOutline(layout.greenhouse))) {
+    return { kind: 'greenhouse' };
+  }
+
   const onSign = layout.forSale.some((tile) => {
     const c = tileCenter(tile);
     return (
@@ -223,6 +247,27 @@ export function targetAt(
 
 function footprintDepth(f: Footprint): number {
   return f.i + f.width / 2 + f.j + f.length / 2;
+}
+
+/**
+ * Screen outline of the greenhouse: its walls, and the gable roof whose back
+ * end peaks above the back-right wall.
+ */
+function greenhouseOutline(f: Footprint): Point[] {
+  const [back, right, front, left] = footprintCorners(f);
+  const up = (p: Point, height = WALL_HEIGHT) => ({ x: p.x, y: p.y - height });
+  const ridgeBack = up(
+    { x: (back.x + right.x) / 2, y: (back.y + right.y) / 2 },
+    WALL_HEIGHT + ROOF_RISE,
+  );
+  return [left, front, right, up(right), ridgeBack, up(back), up(left)];
+}
+
+/** World point just above the middle of the greenhouse's ridge, for its name tag. */
+export function greenhouseLabelAnchor(layout: SceneLayout): Point {
+  const { i, j, width, length } = layout.greenhouse;
+  const middle = gridToWorld(i + width / 2, j + length / 2);
+  return { x: middle.x, y: middle.y - WALL_HEIGHT - ROOF_RISE - 10 };
 }
 
 /** World bounding box of the lot. */

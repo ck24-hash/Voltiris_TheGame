@@ -1,4 +1,23 @@
-import type { CropId, GameContent } from '@voltiris/content';
+import type {
+  CropId,
+  EquipmentKind,
+  GameContent,
+  SetpointId,
+} from '@voltiris/content';
+import {
+  fail,
+  findGreenhouse,
+  updateGreenhouse,
+  type Failure,
+} from './commandHelpers';
+import type { GreenhouseUpgrade } from './equipment';
+import {
+  buyEquipment,
+  serviceEquipment,
+  setAutoControl,
+  setSetpoint,
+  upgradeGreenhouse,
+} from './greenhouseCommands';
 import { cropPrice } from './market';
 import { createRng } from './rng';
 import type { GameState, Greenhouse, Plot } from './state';
@@ -45,12 +64,56 @@ export interface SellCropCommand extends CommandMeta {
   readonly units: number;
 }
 
+/** Installs a device, or upgrades it to its next level (as good as new). */
+export interface BuyEquipmentCommand extends CommandMeta {
+  readonly type: 'BuyEquipment';
+  readonly greenhouseId: string;
+  readonly kind: EquipmentKind;
+}
+
+/** Services a worn device back to new, for a share of its price. */
+export interface ServiceEquipmentCommand extends CommandMeta {
+  readonly type: 'ServiceEquipment';
+  readonly greenhouseId: string;
+  readonly kind: EquipmentKind;
+}
+
+/**
+ * Sets one of the targets the equipment works to. Heating stays below
+ * venting, and fogging below venting: moving one pushes the other along.
+ */
+export interface SetSetpointCommand extends CommandMeta {
+  readonly type: 'SetSetpoint';
+  readonly greenhouseId: string;
+  readonly setpoint: SetpointId;
+  readonly value: number;
+}
+
+/** Lets the climate computer set the targets, or gives them back to the player. */
+export interface SetAutoControlCommand extends CommandMeta {
+  readonly type: 'SetAutoControl';
+  readonly greenhouseId: string;
+  readonly auto: boolean;
+}
+
+/** Buys the greenhouse's next glass or size, or a climate computer. */
+export interface UpgradeGreenhouseCommand extends CommandMeta {
+  readonly type: 'UpgradeGreenhouse';
+  readonly greenhouseId: string;
+  readonly upgrade: GreenhouseUpgrade;
+}
+
 export type Command =
   | PlantCropCommand
   | WaterCommand
   | FertilizeCommand
   | HarvestCropCommand
-  | SellCropCommand;
+  | SellCropCommand
+  | BuyEquipmentCommand
+  | ServiceEquipmentCommand
+  | SetSetpointCommand
+  | SetAutoControlCommand
+  | UpgradeGreenhouseCommand;
 
 export type CommandErrorCode =
   | 'UNKNOWN_COMMAND'
@@ -64,7 +127,14 @@ export type CommandErrorCode =
   | 'ALREADY_FULL'
   | 'STORAGE_FULL'
   | 'INVALID_AMOUNT'
-  | 'NOT_ENOUGH_STOCK';
+  | 'NOT_ENOUGH_STOCK'
+  | 'UNKNOWN_EQUIPMENT'
+  | 'UNKNOWN_SETPOINT'
+  | 'UNKNOWN_UPGRADE'
+  | 'MAX_LEVEL'
+  | 'NOT_INSTALLED'
+  | 'NOT_WORN'
+  | 'NO_COMPUTER';
 
 export interface CommandError {
   readonly code: CommandErrorCode;
@@ -72,8 +142,7 @@ export interface CommandError {
 }
 
 export type CommandResult =
-  | { readonly ok: true; readonly state: GameState }
-  | { readonly ok: false; readonly error: CommandError };
+  { readonly ok: true; readonly state: GameState } | Failure;
 
 /**
  * Applies a player command at the current game hour. Run due ticks first (see
@@ -96,6 +165,16 @@ export function applyCommand(
       return harvestCrop(state, command, content);
     case 'SellCrop':
       return sellCrop(state, command, content);
+    case 'BuyEquipment':
+      return buyEquipment(state, command, content);
+    case 'ServiceEquipment':
+      return serviceEquipment(state, command, content);
+    case 'SetSetpoint':
+      return setSetpoint(state, command, content);
+    case 'SetAutoControl':
+      return setAutoControl(state, command);
+    case 'UpgradeGreenhouse':
+      return upgradeGreenhouse(state, command, content);
     default: {
       // Unreachable for typed callers; commands may come from untrusted input later.
       const { type } = command as { type?: unknown };
@@ -142,10 +221,9 @@ function topUp(
   resource: 'water' | 'nutrients',
   content: GameContent,
 ): CommandResult {
-  const greenhouse = state.greenhouses.find((g) => g.id === greenhouseId);
-  if (!greenhouse) {
-    return fail('GREENHOUSE_NOT_FOUND', `No greenhouse "${greenhouseId}"`);
-  }
+  const found = findGreenhouse(state, greenhouseId);
+  if (!found.ok) return found;
+  const { greenhouse } = found;
   const { amount, cost, max } = content.care[resource];
   const current = greenhouse.climate[resource];
   if (current >= max) {
@@ -252,36 +330,19 @@ function isCrop(cropId: string, content: GameContent): boolean {
 
 type FoundPlot =
   | { readonly ok: true; readonly greenhouse: Greenhouse; readonly plot: Plot }
-  | { readonly ok: false; readonly error: CommandError };
+  | Failure;
 
 function findPlot(
   state: GameState,
   greenhouseId: string,
   plotId: string,
 ): FoundPlot {
-  const greenhouse = state.greenhouses.find((g) => g.id === greenhouseId);
-  if (!greenhouse) {
-    return fail('GREENHOUSE_NOT_FOUND', `No greenhouse "${greenhouseId}"`);
-  }
+  const found = findGreenhouse(state, greenhouseId);
+  if (!found.ok) return found;
+  const { greenhouse } = found;
   const plot = greenhouse.plots.find((p) => p.id === plotId);
   if (!plot) return fail('PLOT_NOT_FOUND', `No plot "${plotId}"`);
   return { ok: true, greenhouse, plot };
-}
-
-function fail(
-  code: CommandErrorCode,
-  message: string,
-): { readonly ok: false; readonly error: CommandError } {
-  return { ok: false, error: { code, message } };
-}
-
-function updateGreenhouse(state: GameState, greenhouse: Greenhouse): GameState {
-  return {
-    ...state,
-    greenhouses: state.greenhouses.map((g) =>
-      g.id === greenhouse.id ? greenhouse : g,
-    ),
-  };
 }
 
 function updatePlot(

@@ -1,6 +1,6 @@
 // Phase 2 "Done when" scenarios, run through the public commands and tick.
 
-import { CROP_IDS, defaultContent } from '@voltiris/content';
+import { CROP_IDS, defaultContent, type GameContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { growthRate, requiredGrowthHours } from './growth';
 import type { GameState } from './state';
@@ -11,10 +11,14 @@ import {
   plant,
   plantingAt,
   runTicks,
+  STILL_AIR,
   withClimate,
 } from './test-utils';
 
 const { crops } = defaultContent;
+
+// These tests set the climate by hand, so the air holds still.
+const content = STILL_AIR;
 
 /** Ticks needed at a constant growth rate, summed hour by hour like tick(). */
 function ticksAtRate(rate: number, requiredHours: number): number {
@@ -28,10 +32,14 @@ function ticksAtRate(rate: number, requiredHours: number): number {
 }
 
 /** Ticks until the crop in plot 0 is ready, or Infinity within `limit`. */
-function ticksToReady(state: GameState, limit = 5000): number {
+function ticksToReady(
+  state: GameState,
+  using: GameContent = content,
+  limit = 5000,
+): number {
   let next = state;
   for (let i = 1; i <= limit; i++) {
-    next = runTicks(next, 1);
+    next = runTicks(next, 1, using);
     if (plantingAt(next)?.status === 'ready') return i;
   }
   return Infinity;
@@ -46,10 +54,10 @@ describe('a tomato in good conditions', () => {
   );
 
   it('is ready to harvest after exactly its growth hours', () => {
-    expect(plantingAt(runTicks(start, TOMATO_HOURS - 1))?.status).toBe(
+    expect(plantingAt(runTicks(start, TOMATO_HOURS - 1, content))?.status).toBe(
       'growing',
     );
-    expect(plantingAt(runTicks(start, TOMATO_HOURS))).toMatchObject({
+    expect(plantingAt(runTicks(start, TOMATO_HOURS, content))).toMatchObject({
       status: 'ready',
       plantedAtHour: 0,
       readyAtHour: TOMATO_HOURS,
@@ -64,7 +72,9 @@ describe('a tomato in a cold greenhouse (14 °C)', () => {
   const start = plant(withClimate(newTestGame(), cold), 'tomato');
 
   it('grows more slowly', () => {
-    expect(plantingAt(runTicks(start, TOMATO_HOURS))?.status).toBe('growing');
+    expect(plantingAt(runTicks(start, TOMATO_HOURS, content))?.status).toBe(
+      'growing',
+    );
     const rate = growthRate(cold, crops.tomato);
     expect(rate).toBeLessThan(1);
     const expectedTicks = ticksAtRate(rate, requiredGrowthHours(crops.tomato));
@@ -73,7 +83,7 @@ describe('a tomato in a cold greenhouse (14 °C)', () => {
   });
 
   it('ends with lower quality', () => {
-    const ready = plantingAt(runTicks(start, ticksToReady(start)));
+    const ready = plantingAt(runTicks(start, ticksToReady(start), content));
     if (ready?.status !== 'ready') throw new Error('expected a ready crop');
     // 14 °C is halfway to the tomato's 10 °C limit: factor 0.5, so stress
     // is 0.5 per hour (stressBelow 1), and quality = 1 / (1 + 0.5).
@@ -87,6 +97,7 @@ describe('climate at a crop limit', () => {
     const state = runTicks(
       plant(withClimate(newTestGame(), frozen), 'tomato'),
       100,
+      content,
     );
     expect(plantingAt(state)).toMatchObject({
       status: 'growing',
@@ -97,7 +108,7 @@ describe('climate at a crop limit', () => {
 });
 
 // Microgreens are happy in the starting greenhouse; the others want more
-// warmth, light or CO₂ (heaters, lights and CO₂ come in Phase 6).
+// warmth, humidity, light or CO₂, which the equipment gives.
 describe.each(CROP_IDS.filter((id) => id !== 'microgreens'))(
   '%s in the starting greenhouse',
   (cropId) => {
@@ -109,12 +120,14 @@ describe.each(CROP_IDS.filter((id) => id !== 'microgreens'))(
       const starting = plant(newTestGame(), cropId);
 
       const optimalTicks = ticksToReady(optimal);
-      const startingTicks = ticksToReady(starting);
+      const startingTicks = ticksToReady(starting, defaultContent);
       expect(optimalTicks).toBe(requiredGrowthHours(crops[cropId]));
       expect(startingTicks).toBeGreaterThan(optimalTicks);
 
-      const optimalReady = plantingAt(runTicks(optimal, optimalTicks));
-      const startingReady = plantingAt(runTicks(starting, startingTicks));
+      const optimalReady = plantingAt(runTicks(optimal, optimalTicks, content));
+      const startingReady = plantingAt(
+        runTicks(starting, startingTicks, defaultContent),
+      );
       if (
         optimalReady?.status !== 'ready' ||
         startingReady?.status !== 'ready'

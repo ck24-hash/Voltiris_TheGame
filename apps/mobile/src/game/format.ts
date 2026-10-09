@@ -93,3 +93,14 @@ export function formatRealDuration(ms: number): string {
 export function formatPercent(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
 }
+
+/** Running costs per in-game day, from the cost per hour: "2.7", "15". */
+export function formatPerDay(perHour: number): string {
+  const perDay = perHour * 24;
+  return perDay < 10 ? perDay.toFixed(1) : String(Math.round(perDay));
+}
+
+/** Power, from the energy used in one hour: "3.2 kW". */
+export function formatKw(kwhPerHour: number): string {
+  return `${kwhPerHour.toFixed(1)} kW`;
+}

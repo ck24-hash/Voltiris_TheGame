@@ -10,10 +10,13 @@ import {
   optimalClimate,
   plant,
   runTicks,
+  STILL_AIR,
   TEST_PLAYER_ID,
   withClimate,
 } from './test-utils';
 
+// The crops grow in a climate set by hand, so the air holds still.
+const content = STILL_AIR;
 const MS_PER_TICK = defaultContent.time.realMsPerTick;
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -38,9 +41,9 @@ describe('catchUp', () => {
     const { clock, state } = setup();
     clock.advance(HOUR_MS / 2);
 
-    const { state: next, report } = catchUp(state, clock, defaultContent);
+    const { state: next, report } = catchUp(state, clock, content);
 
-    expect(next).toEqual(advance(state, clock, defaultContent));
+    expect(next).toEqual(advance(state, clock, content));
     expect(next.clock.gameHour).toBe(120);
     // A cucumber needs 24 h in a perfect climate; the tomato much longer.
     const greenhouse = firstGreenhouse(next);
@@ -65,14 +68,14 @@ describe('catchUp', () => {
 
   it('reports harvests that spoiled in storage', () => {
     const { clock, state } = setup();
-    const ready = runTicks(state, 24);
+    const ready = runTicks(state, 24, content);
     const stored = harvest(ready, 0);
     // The harvest's whole shelf life passes while the player is away.
     clock.advance(
       defaultContent.crops.cucumber.shelfLifeDays * 24 * MS_PER_TICK,
     );
 
-    const { state: next, report } = catchUp(stored, clock, defaultContent);
+    const { state: next, report } = catchUp(stored, clock, content);
     expect(next.storage.lots).toEqual([]);
     expect(report.spoiled).toEqual([
       {
@@ -85,7 +88,7 @@ describe('catchUp', () => {
   it('reports the time skipped beyond the 24-hour cap', () => {
     const { clock, state } = setup();
     clock.advance(30 * HOUR_MS);
-    const { report } = catchUp(state, clock, defaultContent);
+    const { report } = catchUp(state, clock, content);
     expect(report.ticks).toBe(24 * 240);
     expect(report.awayMs).toBe(30 * HOUR_MS);
     expect(report.skippedMs).toBe(6 * HOUR_MS);
@@ -94,18 +97,18 @@ describe('catchUp', () => {
   it('only reports crops that became ready during the catch-up', () => {
     const { clock, state } = setup();
     clock.advance(HOUR_MS / 2);
-    const first = catchUp(state, clock, defaultContent);
+    const first = catchUp(state, clock, content);
     expect(first.report.cropsReady).toHaveLength(1);
 
     clock.advance(10 * MS_PER_TICK);
-    const second = catchUp(first.state, clock, defaultContent);
+    const second = catchUp(first.state, clock, content);
     expect(second.report).toMatchObject({ ticks: 10, cropsReady: [] });
   });
 
   it('changes nothing when no tick is due', () => {
     const { clock, state } = setup();
     clock.advance(MS_PER_TICK - 1);
-    const { state: next, report } = catchUp(state, clock, defaultContent);
+    const { state: next, report } = catchUp(state, clock, content);
     expect(next).toBe(state);
     expect(report).toMatchObject({ ticks: 0, skippedMs: 0, cropsReady: [] });
   });
@@ -113,7 +116,7 @@ describe('catchUp', () => {
   it('reports no time away when the clock went backwards', () => {
     const { clock, state } = setup();
     clock.advance(-HOUR_MS);
-    const { state: next, report } = catchUp(state, clock, defaultContent);
+    const { state: next, report } = catchUp(state, clock, content);
     expect(next.clock.lastTickAt).toBe(clock.now());
     expect(report).toMatchObject({ awayMs: 0, ticks: 0, skippedMs: 0 });
   });

@@ -12,6 +12,7 @@ import {
   plant,
   plantingAt,
   runTicks,
+  STILL_AIR,
   TEST_PLAYER_ID,
   withClimate,
 } from './test-utils';
@@ -27,7 +28,7 @@ describe('createGame', () => {
       defaultContent,
       clock,
     );
-    const { startingGreenhouse, economy } = defaultContent;
+    const { greenhouse: config, economy, control } = defaultContent;
 
     expect(state.version).toBe(STATE_VERSION);
     expect(state.storage).toEqual({ lots: [] });
@@ -35,12 +36,22 @@ describe('createGame', () => {
     expect(state.playerId).toBe(TEST_PLAYER_ID);
     expect(state.clock).toEqual({ gameHour: 0, lastTickAt: clock.now() });
     expect(state.money).toBe(economy.startingMoney);
+    expect(state.owed).toBe(0);
     expect(state.greenhouses).toHaveLength(1);
 
     const greenhouse = firstGreenhouse(state);
-    expect(greenhouse.climate).toEqual(startingGreenhouse.climate);
-    expect(greenhouse.plots).toHaveLength(startingGreenhouse.plots);
+    expect(greenhouse.climate).toEqual(config.startingClimate);
+    expect(greenhouse.plots).toHaveLength(config.sizes[0]?.plots ?? -1);
     expect(greenhouse.plots.every((p) => p.planting === null)).toBe(true);
+    // The first glass and size, no equipment, the player's starting targets.
+    expect(greenhouse).toMatchObject({
+      glass: 1,
+      size: 1,
+      equipment: {},
+      setpoints: control.initial,
+      computer: false,
+      auto: false,
+    });
   });
 
   it('gives every greenhouse and plot a unique id from the seeded rng', () => {
@@ -74,7 +85,7 @@ describe('tick', () => {
       withClimate(newTestGame(), optimalClimate('tomato')),
       'tomato',
     );
-    expect(plantingAt(runTicks(state, 10))).toMatchObject({
+    expect(plantingAt(runTicks(state, 10, STILL_AIR))).toMatchObject({
       status: 'growing',
       growthHours: 10,
       stress: 0,
@@ -86,7 +97,7 @@ describe('tick', () => {
       withClimate(newTestGame(), optimalClimate('cucumber')),
       'cucumber',
     );
-    const ready = runTicks(state, 30);
+    const ready = runTicks(state, 30, STILL_AIR);
     expect(plantingAt(ready)?.status).toBe('ready');
     expect(plantingAt(runTicks(ready, 100))).toEqual(plantingAt(ready));
   });
@@ -122,6 +133,8 @@ describe('tick', () => {
 describe('water and nutrients', () => {
   const { cucumber } = defaultContent.crops;
   const climate = (state: GameState) => firstGreenhouse(state).climate;
+  const run = (state: GameState, ticks: number) =>
+    runTicks(state, ticks, STILL_AIR);
 
   it('are used up by growing crops, in proportion to their growth', () => {
     const start = plant(
@@ -129,7 +142,7 @@ describe('water and nutrients', () => {
       'cucumber',
       1,
     );
-    const after = runTicks(start, 10);
+    const after = run(start, 10);
     // Two cucumbers at full speed grow 10 hours each.
     expect(climate(after).water).toBeCloseTo(
       climate(start).water - 2 * 10 * cucumber.waterUse,
@@ -144,27 +157,27 @@ describe('water and nutrients', () => {
   it('are not used by a crop that has stopped growing, or one that is ready', () => {
     const frozen = { ...optimalClimate('tomato'), temperature: 10 };
     const stalled = plant(withClimate(newTestGame(), frozen), 'tomato');
-    expect(climate(runTicks(stalled, 50))).toEqual(frozen);
+    expect(climate(run(stalled, 50))).toEqual(frozen);
 
     const cucumbers = withClimate(newTestGame(), optimalClimate('cucumber'));
-    const ready = runTicks(plant(cucumbers, 'cucumber'), 30);
+    const ready = run(plant(cucumbers, 'cucumber'), 30);
     expect(plantingAt(ready)?.status).toBe('ready');
-    expect(climate(runTicks(ready, 50))).toEqual(climate(ready));
+    expect(climate(run(ready, 50))).toEqual(climate(ready));
   });
 
   it('running dry stops growth and lowers quality, but the crop lives on', () => {
     const wet = withClimate(newTestGame(), optimalClimate('cucumber'));
     const dry = withClimate(wet, { water: cucumber.climate.water.limitLow });
-    const wetCrop = plantingAt(runTicks(plant(wet, 'cucumber'), 20));
-    const dryCrop = plantingAt(runTicks(plant(dry, 'cucumber'), 20));
+    const wetCrop = plantingAt(run(plant(wet, 'cucumber'), 20));
+    const dryCrop = plantingAt(run(plant(dry, 'cucumber'), 20));
     expect(dryCrop).toMatchObject({ status: 'growing', growthHours: 0 });
     expect(dryCrop?.stress).toBeGreaterThan(wetCrop?.stress ?? 0);
 
     // Watered again, it grows on.
-    const watered = withClimate(runTicks(plant(dry, 'cucumber'), 20), {
+    const watered = withClimate(run(plant(dry, 'cucumber'), 20), {
       water: optimalClimate('cucumber').water,
     });
-    expect(plantingAt(runTicks(watered, 30))?.status).toBe('ready');
+    expect(plantingAt(run(watered, 30))?.status).toBe('ready');
   });
 });
 

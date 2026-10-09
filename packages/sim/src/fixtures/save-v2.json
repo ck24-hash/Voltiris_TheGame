@@ -1,0 +1,67 @@
+{
+  "version": 2,
+  "playerId": "6f1c2a9e-3b7d-4c55-9a10-2d4e8b7f0c31",
+  "clock": { "gameHour": 820, "lastTickAt": 1775001600000 },
+  "rng": { "seed": 1234, "state": 3141592653 },
+  "money": 742,
+  "greenhouses": [
+    {
+      "id": "0b9a4c7e-5d21-4f3a-8e6b-1c2d3e4f5a6b",
+      "climate": {
+        "temperature": 20,
+        "humidity": 70,
+        "co2": 420,
+        "light": 400,
+        "water": 48.5,
+        "nutrients": 2.21
+      },
+      "plots": [
+        {
+          "id": "1a2b3c4d-0000-4000-8000-000000000001",
+          "planting": {
+            "status": "growing",
+            "cropId": "strawberry",
+            "plantedAtHour": 790,
+            "growthHours": 27.75,
+            "stress": 3.5
+          }
+        },
+        {
+          "id": "1a2b3c4d-0000-4000-8000-000000000002",
+          "planting": {
+            "status": "ready",
+            "cropId": "microgreens",
+            "plantedAtHour": 805,
+            "growthHours": 8.2,
+            "stress": 0,
+            "readyAtHour": 813,
+            "quality": 1,
+            "yieldUnits": 6
+          }
+        },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000003", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000004", "planting": null }
+      ]
+    }
+  ],
+  "storage": {
+    "lots": [
+      {
+        "id": "9c8b7a6d-0000-4000-8000-000000000001",
+        "cropId": "cucumber",
+        "units": 12,
+        "quality": 0.71,
+        "harvestedAtHour": 800
+      }
+    ]
+  },
+  "market": {
+    "swings": {
+      "microgreens": 1.04,
+      "cucumber": 0.93,
+      "strawberry": 1.12,
+      "tomato": 0.98,
+      "pepper": 1.01
+    }
+  }
+}

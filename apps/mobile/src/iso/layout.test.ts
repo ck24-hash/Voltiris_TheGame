@@ -4,11 +4,14 @@ import {
   clampToLot,
   createLayout,
   greenhouseBounds,
+  greenhouseLabelAnchor,
   insidePolygon,
   lotBounds,
   PLANT_HIT_HALF_WIDTH,
   plotIndexAt,
+  ROOF_RISE,
   targetAt,
+  WALL_HEIGHT,
   type Footprint,
 } from './layout';
 import {
@@ -90,6 +93,25 @@ describe('createLayout', () => {
     expect(big.greenhouse.length).toBe(12);
     expect(big.lot.length).toBeGreaterThan(layout.lot.length);
   });
+
+  it.each([4, 6, 8])(
+    'stands the equipment inside the walls, behind every plot (%i plots)',
+    (count) => {
+      const { greenhouse, plots, equipmentSpots } = createLayout(count);
+      const spots = Object.values(equipmentSpots);
+      const keys = new Set(spots.map((s) => `${s.i},${s.j}`));
+      expect(keys.size).toBe(spots.length);
+      for (const spot of spots) {
+        expect(contains(greenhouse, { ...spot, width: 1, length: 1 })).toBe(
+          true,
+        );
+        for (const plot of plots) {
+          // Fully behind along i or j, so it is drawn before the plants.
+          expect(spot.i < plot.i || spot.j < plot.j).toBe(true);
+        }
+      }
+    },
+  );
 });
 
 /** Points spread over a tile's diamond, just inside its edges. */
@@ -178,6 +200,33 @@ describe('targetAt', () => {
       const roof = { x: base.x, y: base.y - building.height + 10 };
       expect(targetAt(layout, roof, none)).toMatchObject({ id: building.id });
     }
+  });
+
+  it('finds the greenhouse from its floor, glass and roof around the plots', () => {
+    const { i, j, width, length } = layout.greenhouse;
+    const greenhouse = { kind: 'greenhouse' };
+    // The floor beside the plots, where the equipment stands.
+    expect(targetAt(layout, tileCenter({ i, j: j + 2 }), none)).toEqual(
+      greenhouse,
+    );
+    // High on the glass, and the peak of the roof.
+    const middle = gridToWorld(i + width / 2, j + length / 2);
+    expect(
+      targetAt(layout, { x: middle.x, y: middle.y - WALL_HEIGHT }, none),
+    ).toEqual(greenhouse);
+    const peak = gridToWorld(i + width / 2, j);
+    expect(
+      targetAt(
+        layout,
+        { x: peak.x, y: peak.y - WALL_HEIGHT - ROOF_RISE + 5 },
+        none,
+      ),
+    ).toEqual(greenhouse);
+    // The name tag hangs on the roof, just above the middle of its ridge.
+    const tag = greenhouseLabelAnchor(layout);
+    expect(tag.x).toBe(middle.x);
+    expect(tag.y).toBeLessThan(middle.y - WALL_HEIGHT - ROOF_RISE);
+    expect(targetAt(layout, tag, none)).toEqual(greenhouse);
   });
 
   it('finds plots first, then signs, and nothing on empty lawn', () => {

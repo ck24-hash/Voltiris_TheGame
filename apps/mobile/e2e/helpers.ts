@@ -1,14 +1,14 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import { defaultContent } from '@voltiris/content';
 import { worldToScreen } from '../src/iso/camera';
-import { createLayout, type BuildingId } from '../src/iso/layout';
+import { createLayout, WALL_HEIGHT, type BuildingId } from '../src/iso/layout';
 import { gridToWorld, tileCenter, type Point } from '../src/iso/projection';
 import { firstView } from '../src/iso/view';
 
 // Screen positions come from the game's own layout and camera maths, for the
 // opening view (before any pan or zoom).
 
-const layout = createLayout(defaultContent.startingGreenhouse.plots);
+const layout = createLayout(defaultContent.greenhouse.sizes[0]?.plots ?? 0);
 
 function openingView(page: Page) {
   const viewport = page.viewportSize();
@@ -37,6 +37,18 @@ export function buildingOnScreen(page: Page, id: BuildingId): Point {
   const { i, j, width, length } = building.footprint;
   const base = gridToWorld(i + width / 2, j + length / 2);
   return openingView(page)({ x: base.x, y: base.y - building.height / 3 });
+}
+
+/** High on the greenhouse glass, above the plots. */
+export function greenhouseOnScreen(page: Page): Point {
+  const { i, j, width, length } = layout.greenhouse;
+  const middle = gridToWorld(i + width / 2, j + length / 2);
+  return openingView(page)({ x: middle.x, y: middle.y - WALL_HEIGHT });
+}
+
+/** Lawn in the front yard, with nothing on it. */
+export function lawnOnScreen(page: Page): Point {
+  return openingView(page)(tileCenter({ i: 9, j: 8 }));
 }
 
 export function forSaleSignOnScreen(page: Page): Point {

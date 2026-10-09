@@ -5,7 +5,9 @@ import {
   defaultContent,
   type Climate,
   type CropId,
+  type EquipmentKind,
   type GameContent,
+  type Setpoints,
 } from '@voltiris/content';
 import { createManualClock } from './clock';
 import { applyCommand, type Command } from './commands';
@@ -14,6 +16,19 @@ import type { GameState, Greenhouse, Planting } from './state';
 import { tick } from './tick';
 
 export const TEST_PLAYER_ID = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * The game's content, except that the air keeps whatever climate it has:
+ * for tests of growth in a climate set by hand. Water and nutrients still
+ * get used up.
+ */
+export const STILL_AIR: GameContent = {
+  ...defaultContent,
+  physics: {
+    ...defaultContent.physics,
+    settle: { temperature: 0, humidity: 0, co2: 0, light: 0 },
+  },
+};
 
 export function newTestGame(
   seed = 42,
@@ -45,20 +60,62 @@ export function firstGreenhouse(state: GameState): Greenhouse {
   return greenhouse;
 }
 
-/** Sets the first greenhouse's climate directly (no equipment exists yet). */
+/** Changes the first greenhouse directly. */
+export function withGreenhouse(
+  state: GameState,
+  change: (greenhouse: Greenhouse) => Partial<Greenhouse>,
+): GameState {
+  const [first, ...rest] = state.greenhouses;
+  if (!first) throw new Error('Game has no greenhouse');
+  return { ...state, greenhouses: [{ ...first, ...change(first) }, ...rest] };
+}
+
+/**
+ * Sets the first greenhouse's climate directly. Unless the content is
+ * STILL_AIR, the air then moves on toward its balance.
+ */
 export function withClimate(
   state: GameState,
   climate: Partial<Climate>,
 ): GameState {
-  const [first, ...rest] = state.greenhouses;
-  if (!first) throw new Error('Game has no greenhouse');
-  return {
-    ...state,
-    greenhouses: [
-      { ...first, climate: { ...first.climate, ...climate } },
-      ...rest,
-    ],
-  };
+  return withGreenhouse(state, (g) => ({
+    climate: { ...g.climate, ...climate },
+  }));
+}
+
+/**
+ * A game with money to spare, the first greenhouse fitted with `kinds` (one
+ * level each) and some setpoints changed.
+ */
+export function equipped(
+  kinds: readonly EquipmentKind[],
+  setpoints: Partial<Setpoints> = {},
+  start: GameState = newTestGame(),
+): GameState {
+  let state: GameState = { ...start, money: 100_000 };
+  for (const kind of kinds) state = buy(state, kind);
+  return withGreenhouse(state, (g) => ({
+    setpoints: { ...g.setpoints, ...setpoints },
+  }));
+}
+
+/** Buys (or upgrades) a device for the first greenhouse; throws if refused. */
+export function buy(
+  state: GameState,
+  kind: EquipmentKind,
+  content: GameContent = defaultContent,
+): GameState {
+  return accept(
+    state,
+    {
+      type: 'BuyEquipment',
+      id: `cmd-buy-${kind}`,
+      issuedAt: 0,
+      greenhouseId: firstGreenhouse(state).id,
+      kind,
+    },
+    content,
+  );
 }
 
 /** Applies a command; throws if it is rejected. */
@@ -130,6 +187,58 @@ export function runTicks(
 
 export function plantingAt(state: GameState, plotIndex = 0): Planting | null {
   return firstGreenhouse(state).plots[plotIndex]?.planting ?? null;
+}
+
+export interface GrownCrop {
+  readonly state: GameState;
+  /** Ticks from planting until the crops were ready. */
+  readonly ticks: number;
+  readonly quality: number;
+  /** Volticoins spent on water and nutrients by hand. */
+  readonly careCost: number;
+}
+
+/**
+ * Plants every plot of the first greenhouse with one crop and runs the game
+ * until they are ready, watering and feeding by hand whenever the crop's
+ * gauge says it needs it (unless `byHand` is false).
+ */
+export function growCrop(
+  state: GameState,
+  cropId: CropId,
+  {
+    content = defaultContent,
+    byHand = true,
+    limit = 5000,
+  }: { content?: GameContent; byHand?: boolean; limit?: number } = {},
+): GrownCrop {
+  let next = state;
+  firstGreenhouse(state).plots.forEach((_, k) => {
+    next = plant(next, cropId, k, content);
+  });
+  const greenhouseId = firstGreenhouse(next).id;
+  const bands = content.crops[cropId].climate;
+  let careCost = 0;
+  const care = (type: 'Water' | 'Fertilize') => {
+    next = accept(
+      next,
+      { type, id: 'cmd-care', issuedAt: 0, greenhouseId },
+      content,
+    );
+    careCost += content.care[type === 'Water' ? 'water' : 'nutrients'].cost;
+  };
+  for (let ticks = 1; ticks <= limit; ticks++) {
+    next = tick(next, content);
+    const planting = plantingAt(next);
+    if (planting?.status === 'ready') {
+      return { state: next, ticks, quality: planting.quality, careCost };
+    }
+    if (!byHand) continue;
+    const { water, nutrients } = firstGreenhouse(next).climate;
+    if (water < bands.water.optimalLow) care('Water');
+    if (nutrients < bands.nutrients.optimalLow) care('Fertilize');
+  }
+  throw new Error(`The ${cropId} was not ready within ${limit} ticks`);
 }
 
 /** Freezes a value recursively, so any mutation in the code under test throws. */

@@ -4,6 +4,8 @@ import {
   buildingOnScreen,
   collectErrors,
   forSaleSignOnScreen,
+  greenhouseOnScreen,
+  lawnOnScreen,
   openGame,
   plotOnScreen,
   snapshot,
@@ -29,7 +31,7 @@ test('opens on the map with the HUD, the climate and the buildings', async ({
   await expect(page.getByText('Day 1 · 00:00')).toBeVisible();
   await expect(page.getByLabel('500 Volticoins')).toBeVisible();
   await expect(page.getByRole('group')).toHaveCount(6);
-  for (const name of ['Market', 'Storage', 'Energy', 'Village']) {
+  for (const name of ['Greenhouse', 'Market', 'Storage', 'Energy', 'Village']) {
     await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
   }
   await snapshot(page, info, 'map');
@@ -127,6 +129,45 @@ test('plants, harvests and sells for a profit within minutes', async ({
       ),
     )
     .toBeGreaterThan(500);
+});
+
+// Phase 6 "Done when": each piece of equipment visibly changes the climate
+// and growth in the UI (the sim tests cover every piece; this is the heater).
+test('buys a heater, and the greenhouse warms up for the cucumbers', async ({
+  page,
+}, info) => {
+  await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
+  await openGame(page);
+  await tap(page, plotOnScreen(page, 0));
+  const bubble = page.getByRole('dialog', { name: 'Plot 1' });
+  await bubble.getByRole('button', { name: 'Plant Cucumber' }).click();
+  await expect(bubble).toContainText('Too cold');
+  const temperature = page.getByRole('group', { name: 'Temperature' });
+  await expect(temperature).toContainText('20.0 °C');
+  await expect(temperature).toHaveAttribute('data-status', 'warn');
+
+  // Close the bubble, then tap the greenhouse itself.
+  await tap(page, lawnOnScreen(page));
+  await expect(bubble).toBeHidden();
+  await tap(page, greenhouseOnScreen(page));
+  const window = page.getByRole('dialog', { name: 'Greenhouse' });
+  await window.getByRole('button', { name: /^Buy Heater/ }).click();
+  await expect(page.getByLabel('344 Volticoins')).toBeVisible();
+  await expect(window).toContainText('Heating · 75%');
+  await snapshot(page, info, 'greenhouse-window');
+
+  await window.getByRole('tab', { name: 'Climate' }).click();
+  await expect(window.getByRole('group', { name: 'Heat up to' })).toContainText(
+    '23.0 °C',
+  );
+  await window.getByRole('button', { name: 'Close' }).click();
+
+  await page.clock.fastForward(3 * 60_000);
+  await expect(temperature).toContainText('23.0 °C');
+  await expect(temperature).toHaveAttribute('data-status', 'good');
+  await tap(page, plotOnScreen(page, 0));
+  await expect(bubble).not.toContainText('Too cold');
+  await snapshot(page, info, 'warm-greenhouse');
 });
 
 test('says land for sale comes later', async ({ page }) => {

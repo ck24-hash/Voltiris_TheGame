@@ -3,8 +3,11 @@
 export const SIM_VERSION = '0.1.0';
 
 export * from './catchUp';
+export * from './climate';
 export * from './clock';
 export * from './commands';
+export * from './control';
+export * from './equipment';
 export * from './growth';
 export * from './market';
 export * from './newGame';

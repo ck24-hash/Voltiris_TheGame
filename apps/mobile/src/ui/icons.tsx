@@ -1,4 +1,4 @@
-import type { ClimateVariable, Season } from '@voltiris/content';
+import type { ClimateVariable, EquipmentKind, Season } from '@voltiris/content';
 import type { ReactNode } from 'react';
 
 // Bold placeholder icons in the toon style; they take the text colour.
@@ -88,6 +88,97 @@ export function ClimateIcon({
   size?: number | undefined;
 }) {
   return <Icon size={size}>{CLIMATE_PATHS[variable]}</Icon>;
+}
+
+const EQUIPMENT_PATHS: Record<EquipmentKind, ReactNode> = {
+  heater: (
+    <path
+      d="M12 2.8c1 3.4 5.6 5.6 5.6 10.6a5.6 5.6 0 0 1-11.2 0c0-2.6 1.4-4.3 2.6-5.4.2 1.8 1 2.9 2.1 3.4-.3-3 .2-6 .9-8.6z"
+      fill="currentColor"
+      stroke="none"
+    />
+  ),
+  vents: (
+    <>
+      <path d="M3 9l9-5 9 5" />
+      <path d="M6 13h12M6 16.5h12M6 20h12" />
+    </>
+  ),
+  fogger: (
+    <>
+      <path d="M4 6h16M8 6v2.5M12 6v2.5M16 6v2.5" />
+      <circle cx="8" cy="13" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="15.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="16" cy="13" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="19.5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="14.5" cy="20" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
+  co2: (
+    <>
+      <path d="M9 3h6M10 3v3M14 3v3" />
+      <rect x="7" y="6" width="10" height="15.5" rx="4" />
+      <path d="M7 12h10" />
+    </>
+  ),
+  lights: (
+    <>
+      <path d="M9 18h6M10 21h4" />
+      <path d="M12 2.8a6 6 0 0 0-3.6 10.8c.6.5 1 1.3 1 2.1V16h5.2v-.3c0-.8.4-1.6 1-2.1A6 6 0 0 0 12 2.8z" />
+    </>
+  ),
+  fertigation: (
+    <>
+      <path d="M3 6h9a3 3 0 0 1 3 3v2" />
+      <path d="M13 11h4" />
+      <path
+        d="M15 14.5c1.4 1.8 2.5 3 2.5 4.2a2.5 2.5 0 0 1-5 0c0-1.2 1.1-2.4 2.5-4.2z"
+        fill="currentColor"
+        stroke="none"
+      />
+    </>
+  ),
+};
+
+export function EquipmentIcon({
+  kind,
+  size,
+}: {
+  kind: EquipmentKind;
+  size?: number | undefined;
+}) {
+  return <Icon size={size}>{EQUIPMENT_PATHS[kind]}</Icon>;
+}
+
+/** Window panes: the greenhouse glass. */
+export function GlassIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <rect x="4" y="3.5" width="16" height="17" rx="1.5" />
+      <path d="M12 3.5v17M4 12h16M7 9.5l2.5-2.5M15 17.5l2.5-2.5" />
+    </Icon>
+  );
+}
+
+/** Arrows out: a bigger greenhouse. */
+export function SizeIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+      <path d="M4 4l5.5 5.5M20 4l-5.5 5.5M4 20l5.5-5.5M20 20l-5.5-5.5" />
+    </Icon>
+  );
+}
+
+/** A chip: the climate computer. */
+export function ComputerIcon({ size }: IconProps) {
+  return (
+    <Icon size={size}>
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+      <rect x="9.5" y="9.5" width="5" height="5" fill="currentColor" />
+      <path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3" />
+    </Icon>
+  );
 }
 
 const SEASON_PATHS: Record<Season, ReactNode> = {

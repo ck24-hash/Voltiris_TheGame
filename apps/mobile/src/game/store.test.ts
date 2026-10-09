@@ -100,6 +100,25 @@ describe('game store', () => {
     expect(store.getState().checkpoint).toBe(5);
   });
 
+  it('buys, services, sets and upgrades the greenhouse through commands', () => {
+    const { store } = createTestStore();
+    const { id } = firstGreenhouseOf(store);
+    const actions = store.getState();
+
+    expect(actions.setAutoControl(id, true)?.code).toBe('NO_COMPUTER');
+    expect(actions.buyEquipment(id, 'heater')).toBeNull();
+    expect(actions.serviceEquipment(id, 'heater')?.code).toBe('NOT_WORN');
+    expect(actions.setSetpoint(id, 'heatTo', 24)).toBeNull();
+    expect(actions.upgradeGreenhouse(id, 'glass')?.code).toBe(
+      'NOT_ENOUGH_MONEY',
+    );
+
+    const greenhouse = firstGreenhouseOf(store);
+    expect(greenhouse.equipment.heater).toEqual({ level: 1, wear: 0 });
+    expect(greenhouse.setpoints.heatTo).toBe(24);
+    expect(store.getState().checkpoint).toBe(2);
+  });
+
   it('asks for a save after every accepted command, not a rejected one', () => {
     const { store } = createTestStore();
     const greenhouse = firstGreenhouseOf(store);

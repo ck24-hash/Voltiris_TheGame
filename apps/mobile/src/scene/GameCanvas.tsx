@@ -1,6 +1,16 @@
 import { Application, extend } from '@pixi/react';
-import type { CropDef, CropId } from '@voltiris/content';
-import { growthProgress, type Greenhouse, type Planting } from '@voltiris/sim';
+import {
+  EQUIPMENT_KINDS,
+  type CropDef,
+  type CropId,
+  type EquipmentKind,
+} from '@voltiris/content';
+import {
+  growthProgress,
+  type ClimatePlan,
+  type Greenhouse,
+  type Planting,
+} from '@voltiris/sim';
 import {
   Container,
   Graphics,
@@ -10,9 +20,11 @@ import {
 } from 'pixi.js';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStore } from '../game/context';
+import { equipmentPlan } from '../game/selectors';
 import type { BubbleAnchor } from '../game/store';
 import {
   createLayout,
+  greenhouseLabelAnchor,
   targetAt,
   type Building,
   type BuildingId,
@@ -34,7 +46,12 @@ import {
 } from '../iso/scenery';
 import { BUILDING_INFO } from '../ui/buildingInfo';
 import { drawBuilding } from './draw/buildings';
-import { drawEquipment, EQUIPMENT_SHAPES } from './draw/equipment';
+import {
+  drawEquipmentBack,
+  drawEquipmentFront,
+  sameLook,
+  type EquipmentLook,
+} from './draw/equipment';
 import { drawGround } from './draw/ground';
 import { drawGreenhouseBack, drawGreenhouseFront } from './draw/greenhouse';
 import {
@@ -101,19 +118,39 @@ function labelAnchor({ footprint: f, height }: Building): Point {
   return at(f.i + f.width / 2, f.j + f.length / 2, height + 10);
 }
 
+/** What the scene shows of the equipment: what is fitted, and what runs. */
+function equipmentLook(
+  greenhouse: Greenhouse,
+  plan: ClimatePlan,
+  running: boolean,
+): EquipmentLook {
+  const load = (kind: EquipmentKind) =>
+    running ? (plan.devices[kind]?.load ?? 0) : 0;
+  return {
+    levels: Object.fromEntries(
+      EQUIPMENT_KINDS.map((kind) => [
+        kind,
+        greenhouse.equipment[kind]?.level ?? 0,
+      ]),
+    ) as Record<EquipmentKind, number>,
+    heating: load('heater') > 0,
+    fogging: load('fogger') > 0,
+    dosing: load('co2') > 0,
+    lit: load('lights') > 0,
+    // In tenths, so the roof only redraws when the vents move visibly.
+    ventOpening: Math.ceil(load('vents') * 10) / 10,
+  };
+}
+
 type SceneRun =
   | { readonly kind: 'static'; readonly items: readonly SceneItem[] }
   | { readonly kind: 'greenhouse' }
   | { readonly kind: 'sign'; readonly tile: GridPoint };
 
 /** Back-to-front scene, with neighbouring static items merged into one drawing. */
-function buildScene(layout: SceneLayout, debug: boolean) {
+function buildScene(layout: SceneLayout) {
   const { standing, flat } = scatterScenery(layout);
-  const items = sceneItems(
-    layout,
-    standing,
-    debug ? EQUIPMENT_SHAPES.length : 0,
-  );
+  const items = sceneItems(layout, standing);
   const runs: SceneRun[] = [];
   for (const item of items) {
     if (item.kind === 'greenhouse' || item.kind === 'sign') {
@@ -128,6 +165,9 @@ function buildScene(layout: SceneLayout, debug: boolean) {
   return { flat, runs };
 }
 
+/** The greenhouse's name tag shares the buildings' label slots. */
+type LabelId = BuildingId | 'greenhouse';
+
 export function GameCanvas({ debug = false }: { debug?: boolean }) {
   const greenhouse = useGame((s) => s.game.greenhouses[0]);
   const crops = useGame((s) => s.content.crops);
@@ -136,9 +176,9 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
 
   const plotCount = greenhouse?.plots.length ?? 0;
   const layout = useMemo(() => createLayout(plotCount), [plotCount]);
-  const scene = useMemo(() => buildScene(layout, debug), [layout, debug]);
+  const scene = useMemo(() => buildScene(layout), [layout]);
   const hostRef = useRef<HTMLDivElement>(null);
-  const labelsRef = useRef(new Map<BuildingId, HTMLElement>());
+  const labelsRef = useRef(new Map<LabelId, HTMLElement>());
   const [app, setApp] = useState<PixiApp | null>(null);
 
   const events = useMemo<CameraEvents>(
@@ -161,6 +201,8 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
           });
         } else if (target?.kind === 'building') {
           openWindow(target.id);
+        } else if (target?.kind === 'greenhouse') {
+          openWindow('greenhouse');
         } else {
           selectPlot(null);
           if (target?.kind === 'forSale') {
@@ -174,10 +216,17 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
         if (store.getState().selection) store.getState().selectPlot(null);
       },
       onChange: (toScreen) => {
-        for (const building of layout.buildings) {
-          const label = labelsRef.current.get(building.id);
+        const anchors: [LabelId, Point][] = [
+          ['greenhouse', greenhouseLabelAnchor(layout)],
+          ...layout.buildings.map((b): [LabelId, Point] => [
+            b.id,
+            labelAnchor(b),
+          ]),
+        ];
+        for (const [id, anchor] of anchors) {
+          const label = labelsRef.current.get(id);
           if (!label) continue;
-          const p = toScreen(labelAnchor(building));
+          const p = toScreen(anchor);
           label.style.transform = `translate(${p.x}px, ${p.y}px) translate(-50%, -100%)`;
         }
       },
@@ -185,6 +234,14 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
     [store, greenhouse, crops, layout],
   );
   const { setContainer, handlers } = useCamera(hostRef, layout, events);
+  const labels: { id: LabelId; title: string; soon: boolean }[] = [
+    { id: 'greenhouse', title: 'Greenhouse', soon: false },
+    ...layout.buildings.map(({ id }) => ({
+      id,
+      title: BUILDING_INFO[id].title,
+      soon: BUILDING_INFO[id].soon,
+    })),
+  ];
 
   return (
     <div ref={hostRef} className={styles.host} {...handlers}>
@@ -219,7 +276,7 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
         </pixiContainer>
       </Application>
       <div className={styles.labels}>
-        {layout.buildings.map(({ id }) => (
+        {labels.map(({ id, title, soon }) => (
           <button
             key={id}
             ref={(el) => {
@@ -227,15 +284,13 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
               else labelsRef.current.delete(id);
             }}
             type="button"
-            aria-label={BUILDING_INFO[id].title}
+            aria-label={title}
             className={styles.label}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => store.getState().openWindow(id)}
           >
-            {BUILDING_INFO[id].title}
-            {BUILDING_INFO[id].soon && (
-              <span className={styles.soon}>Soon</span>
-            )}
+            {title}
+            {soon && <span className={styles.soon}>Soon</span>}
           </button>
         ))}
       </div>
@@ -282,11 +337,6 @@ const StaticRun = memo(function StaticRun({
               BUILDING_INFO[item.building.id].soon,
             );
             break;
-          case 'equipment': {
-            const shape = EQUIPMENT_SHAPES[item.index];
-            if (shape) drawEquipment(g, shape, tileCenter(item.tile));
-            break;
-          }
         }
       }
     },
@@ -331,6 +381,10 @@ function GreenhouseView({
   layout: SceneLayout;
   selectedPlotId: string | null;
 }) {
+  const game = useGame((s) => s.game);
+  const content = useGame((s) => s.content);
+  const { plan, running } = equipmentPlan(game, greenhouse, content);
+  const look = equipmentLook(greenhouse, plan, running);
   const plots = greenhouse.plots
     .flatMap((plot, index) => {
       const tile = layout.plots[index];
@@ -340,7 +394,8 @@ function GreenhouseView({
 
   return (
     <pixiContainer>
-      <GreenhouseBack layout={layout} />
+      <GreenhouseBack layout={layout} glass={greenhouse.glass} />
+      <EquipmentBack layout={layout} look={look} />
       {plots.map(({ plot, tile }) => {
         const look = plantLook(plot.planting, crops);
         // Primitive props keep PlotView's memo effective.
@@ -355,34 +410,76 @@ function GreenhouseView({
           />
         );
       })}
-      <GreenhouseFront layout={layout} />
+      <EquipmentFront layout={layout} look={look} />
+      <GreenhouseFront
+        layout={layout}
+        glass={greenhouse.glass}
+        vents={look.levels.vents}
+        ventOpening={look.ventOpening}
+      />
     </pixiContainer>
   );
 }
 
 const GreenhouseBack = memo(function GreenhouseBack({
   layout,
+  glass,
 }: {
   layout: SceneLayout;
+  glass: number;
 }) {
   const draw = useCallback(
-    (g: Graphics) => drawGreenhouseBack(g, layout.greenhouse),
-    [layout],
+    (g: Graphics) => drawGreenhouseBack(g, layout.greenhouse, glass),
+    [layout, glass],
   );
   return <pixiGraphics draw={draw} />;
 });
 
 const GreenhouseFront = memo(function GreenhouseFront({
   layout,
+  glass,
+  vents,
+  ventOpening,
 }: {
   layout: SceneLayout;
+  glass: number;
+  vents: number;
+  ventOpening: number;
 }) {
   const draw = useCallback(
-    (g: Graphics) => drawGreenhouseFront(g, layout.greenhouse),
-    [layout],
+    (g: Graphics) =>
+      drawGreenhouseFront(g, layout.greenhouse, glass, vents, ventOpening),
+    [layout, glass, vents, ventOpening],
   );
   return <pixiGraphics draw={draw} />;
 });
+
+interface EquipmentProps {
+  readonly layout: SceneLayout;
+  readonly look: EquipmentLook;
+}
+
+/** Redraws only when the equipment changes or starts or stops working. */
+const sameEquipment = (a: EquipmentProps, b: EquipmentProps) =>
+  a.layout === b.layout && sameLook(a.look, b.look);
+
+const EquipmentBack = memo(function EquipmentBack({
+  layout,
+  look,
+}: EquipmentProps) {
+  return (
+    <pixiGraphics draw={(g: Graphics) => drawEquipmentBack(g, layout, look)} />
+  );
+}, sameEquipment);
+
+const EquipmentFront = memo(function EquipmentFront({
+  layout,
+  look,
+}: EquipmentProps) {
+  return (
+    <pixiGraphics draw={(g: Graphics) => drawEquipmentFront(g, layout, look)} />
+  );
+}, sameEquipment);
 
 const PlotView = memo(function PlotView({
   tile,

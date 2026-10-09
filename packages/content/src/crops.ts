@@ -78,7 +78,7 @@ export const CROPS: Readonly<Record<CropId, CropDef>> = {
   cucumber: {
     name: 'Cucumber',
     growthHours: 24,
-    yieldPerPlot: 12,
+    yieldPerPlot: 14,
     seedCost: 6,
     basePrice: 1.8,
     seasonalPrice: { spring: 1.1, summer: 0.8, autumn: 1, winter: 1.25 },
