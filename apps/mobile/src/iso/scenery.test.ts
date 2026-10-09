@@ -41,6 +41,7 @@ describe('scenery', () => {
     const blocked = [
       layout.greenhouse,
       layout.path,
+      layout.energyYard,
       ...layout.buildings.map((b) => b.footprint),
     ];
     for (const { i, j } of onLot) {
@@ -102,11 +103,16 @@ describe('sceneItems', () => {
     expect(frontFence).toBeGreaterThan(greenhouse);
   });
 
-  it('draws the energy shed after the greenhouse it stands beside', () => {
+  it('draws the energy shed and its yard after the greenhouse, before the barn in front', () => {
     const greenhouse = indexOf((it) => it.kind === 'greenhouse');
-    const shed = indexOf(
-      (it) => it.kind === 'building' && it.building.id === 'energy',
+    const energy = indexOf((it) => it.kind === 'energy');
+    const barn = indexOf(
+      (it) => it.kind === 'building' && it.building.id === 'storage',
     );
-    expect(shed).toBeGreaterThan(greenhouse);
+    expect(energy).toBeGreaterThan(greenhouse);
+    expect(energy).toBeLessThan(barn);
+    expect(
+      items.some((it) => it.kind === 'building' && it.building.id === 'energy'),
+    ).toBe(false);
   });
 });

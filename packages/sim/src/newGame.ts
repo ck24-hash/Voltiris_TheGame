@@ -1,5 +1,6 @@
 import type { GameContent } from '@voltiris/content';
 import type { Clock } from './clock';
+import { initialEnergy } from './energy';
 import { levelAt } from './equipment';
 import { initialMarket } from './market';
 import { createRng, seedRng } from './rng';
@@ -45,5 +46,6 @@ export function createGame(
     greenhouses: [greenhouse],
     storage: { lots: [] },
     market: initialMarket(),
+    energy: initialEnergy(),
   };
 }

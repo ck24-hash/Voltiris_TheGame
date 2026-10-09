@@ -150,6 +150,47 @@ export function EquipmentIcon({
   return <Icon size={size}>{EQUIPMENT_PATHS[kind]}</Icon>;
 }
 
+/** The parts of the power supply, for the energy window. */
+export type PowerPart = 'solar' | 'battery' | 'chp' | 'grid' | 'greenhouse';
+
+const POWER_PATHS: Record<PowerPart, ReactNode> = {
+  solar: CLIMATE_PATHS.light,
+  battery: (
+    <>
+      <rect x="3" y="7" width="16" height="10" rx="2" />
+      <path d="M21 10.5v3" />
+      <path d="M7 10v4M10.5 10v4M14 10v4" />
+    </>
+  ),
+  chp: (
+    <>
+      <path d="M3 21V11l5 3v-3l5 3V5h4v16z" fill="currentColor" stroke="none" />
+      <path d="M15 3.5c1-1 2.5-1 3.5 0" />
+    </>
+  ),
+  grid: (
+    <>
+      <path d="M12 2.5l-5 19M12 2.5l5 19M8.6 15h6.8M9.6 11h4.8M6 7h12" />
+    </>
+  ),
+  greenhouse: (
+    <>
+      <path d="M3 21V10l9-6.5L21 10v11z" />
+      <path d="M12 3.5V21M3 13h18" />
+    </>
+  ),
+};
+
+export function PowerIcon({
+  part,
+  size,
+}: {
+  part: PowerPart;
+  size?: number | undefined;
+}) {
+  return <Icon size={size}>{POWER_PATHS[part]}</Icon>;
+}
+
 /** Window panes: the greenhouse glass. */
 export function GlassIcon({ size }: IconProps) {
   return (

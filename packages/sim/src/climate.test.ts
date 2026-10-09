@@ -11,6 +11,7 @@ import {
   plantActivity,
   type PlantActivity,
 } from './climate';
+import { hourPrices } from './energy';
 import type { Greenhouse } from './state';
 import {
   equipped,
@@ -29,10 +30,30 @@ function greenhouseOf(...args: Parameters<typeof equipped>): Greenhouse {
   return firstGreenhouse(equipped(...args));
 }
 
+// The climate does not depend on the hour's prices; midnight's will do.
+function planWith(
+  greenhouse: Greenhouse,
+  activity: PlantActivity,
+  using: GameContent,
+  running = true,
+) {
+  return planClimate(
+    greenhouse,
+    activity,
+    using,
+    hourPrices(0, using),
+    running,
+  );
+}
+
+function planOf(greenhouse: Greenhouse, using: GameContent) {
+  return greenhousePlan(greenhouse, using, hourPrices(0, using));
+}
+
 describe('an empty greenhouse', () => {
   it('starts at the balance the weather and the first glass give', () => {
     const greenhouse = firstGreenhouse(newTestGame());
-    const plan = planClimate(greenhouse, NOTHING, content);
+    const plan = planWith(greenhouse, NOTHING, content);
     for (const variable of AIR_VARIABLES) {
       expect(plan.balance[variable], variable).toBeCloseTo(
         content.greenhouse.startingClimate[variable],
@@ -44,7 +65,7 @@ describe('an empty greenhouse', () => {
 
   it('is warmer and darker behind better-insulating glass', () => {
     const plan = (glass: number) =>
-      planClimate(
+      planWith(
         firstGreenhouse(withGreenhouse(newTestGame(), () => ({ glass }))),
         NOTHING,
         content,
@@ -64,8 +85,8 @@ describe('growing plants', () => {
     );
     const activity = plantActivity(planted, content);
     expect(activity.growth).toBeGreaterThan(0);
-    const empty = planClimate(planted, NOTHING, content).balance;
-    const busy = planClimate(planted, activity, content).balance;
+    const empty = planWith(planted, NOTHING, content).balance;
+    const busy = planWith(planted, activity, content).balance;
     expect(busy.humidity).toBeGreaterThan(empty.humidity + 2);
     expect(busy.co2).toBeLessThan(empty.co2 - 10);
     expect(busy.temperature).toBe(empty.temperature);
@@ -83,7 +104,7 @@ describe('growing plants', () => {
 describe('nextClimate', () => {
   it('moves the air part of the way to its balance each hour', () => {
     const greenhouse = greenhouseOf(['heater']);
-    const plan = planClimate(greenhouse, NOTHING, content);
+    const plan = planWith(greenhouse, NOTHING, content);
     const next = nextClimate(greenhouse.climate, plan, content);
     const { temperature } = greenhouse.climate;
     expect(next.temperature).toBeCloseTo(
@@ -97,7 +118,7 @@ describe('nextClimate', () => {
 
   it('settles right on the balance once it is close, so it reaches the setpoint', () => {
     const greenhouse = greenhouseOf(['heater']);
-    const plan = planClimate(greenhouse, NOTHING, content);
+    const plan = planWith(greenhouse, NOTHING, content);
     let climate = greenhouse.climate;
     for (let hour = 0; hour < 12; hour++) {
       climate = nextClimate(climate, plan, content);
@@ -109,7 +130,7 @@ describe('nextClimate', () => {
   it('takes water and nutrients from the plan', () => {
     const greenhouse = greenhouseOf(['fertigation']);
     const drinking = { growth: 4, water: 3, nutrients: 0.2 };
-    const plan = planClimate(greenhouse, drinking, content);
+    const plan = planWith(greenhouse, drinking, content);
     const next = nextClimate(greenhouse.climate, plan, content);
     expect(next.water).toBe(plan.substrate.water);
     expect(next.nutrients).toBe(plan.substrate.nutrients);
@@ -118,7 +139,7 @@ describe('nextClimate', () => {
 
 describe('equipment', () => {
   it('works to its setpoint', () => {
-    const plan = (g: Greenhouse) => greenhousePlan(g, content).balance;
+    const plan = (g: Greenhouse) => planOf(g, content).balance;
     expect(
       plan(greenhouseOf(['heater'], { heatTo: 23 })).temperature,
     ).toBeCloseTo(23, 9);
@@ -140,10 +161,7 @@ describe('equipment', () => {
     const heater = content.equipment.levels.heater[0];
     const glass = content.greenhouse.glass[0];
     if (!heater || !glass) throw new Error('expected content');
-    const plan = greenhousePlan(
-      greenhouseOf(['heater'], { heatTo: 30 }),
-      content,
-    );
+    const plan = planOf(greenhouseOf(['heater'], { heatTo: 30 }), content);
     expect(plan.devices.heater?.load).toBe(1);
     expect(plan.balance.temperature).toBeCloseTo(
       content.greenhouse.startingClimate.temperature +
@@ -153,7 +171,7 @@ describe('equipment', () => {
   });
 
   it('idles when the air is already where the setpoint wants it', () => {
-    const plan = greenhousePlan(
+    const plan = planOf(
       greenhouseOf(['heater', 'fogger', 'co2', 'lights'], {
         heatTo: 15,
         humidityMin: 40,
@@ -170,8 +188,8 @@ describe('equipment', () => {
 
   it('stays off when it cannot run, leaving the greenhouse to the weather', () => {
     const greenhouse = greenhouseOf(['heater', 'co2', 'lights']);
-    const off = planClimate(greenhouse, NOTHING, content, false);
-    const empty = planClimate(firstGreenhouse(newTestGame()), NOTHING, content);
+    const off = planWith(greenhouse, NOTHING, content, false);
+    const empty = planWith(firstGreenhouse(newTestGame()), NOTHING, content);
     expect(off.devices).toEqual({});
     expect(off.cost).toBe(0);
     expect(off.balance).toEqual(empty.balance);
@@ -180,11 +198,8 @@ describe('equipment', () => {
   it('the gas heater burns gas and its exhaust adds CO₂; the heat pump runs on a quarter as much power', () => {
     const [burner, , heatPump] = content.equipment.levels.heater;
     if (!burner || !heatPump) throw new Error('expected heater levels');
-    const gas = greenhousePlan(greenhouseOf(['heater']), content);
-    const pump = greenhousePlan(
-      greenhouseOf(['heater', 'heater', 'heater']),
-      content,
-    );
+    const gas = planOf(greenhouseOf(['heater']), content);
+    const pump = planOf(greenhouseOf(['heater', 'heater', 'heater']), content);
 
     expect(gas.gas).toBeGreaterThan(0);
     expect(gas.power).toBe(0);
@@ -199,7 +214,7 @@ describe('equipment', () => {
   });
 
   it('venting lets CO₂ out, so holding it costs more', () => {
-    const open = greenhousePlan(
+    const open = planOf(
       firstGreenhouse(
         withGreenhouse(
           equipped(['co2', 'vents'], { ventAbove: 22, co2: 600 }),
@@ -208,7 +223,7 @@ describe('equipment', () => {
       ),
       content,
     );
-    const shut = greenhousePlan(
+    const shut = planOf(
       firstGreenhouse(
         withGreenhouse(equipped(['co2'], { co2: 600 }), () => ({ glass: 3 })),
       ),
@@ -226,13 +241,13 @@ describe('equipment', () => {
         outside: { ...physics.outside, temperature: 32 },
       },
     };
-    const plan = greenhousePlan(greenhouseOf(['vents']), heatwave);
+    const plan = planOf(greenhouseOf(['vents']), heatwave);
     expect(plan.devices.vents?.load).toBe(1);
     expect(plan.balance.temperature).toBeGreaterThan(32);
   });
 
   it('fog cools the air a little', () => {
-    const plan = greenhousePlan(greenhouseOf(['fogger']), content);
+    const plan = planOf(greenhouseOf(['fogger']), content);
     expect(plan.devices.fogger?.load).toBeGreaterThan(0);
     expect(plan.balance.temperature).toBeLessThan(
       content.greenhouse.startingClimate.temperature,
@@ -245,29 +260,29 @@ describe('equipment', () => {
       water: water - 2,
       nutrients: nutrients - 0.05,
     });
-    const plan = greenhousePlan(firstGreenhouse(dry), content);
+    const plan = planOf(firstGreenhouse(dry), content);
     expect(plan.substrate).toEqual({ water, nutrients });
     expect(plan.devices.fertigation?.cost).toBeGreaterThan(0);
 
     // Far below: as much as it can give in an hour.
     const parched = withClimate(dry, { water: 20 });
     const level = content.equipment.levels.fertigation[0];
-    expect(
-      greenhousePlan(firstGreenhouse(parched), content).substrate.water,
-    ).toBe(20 + (level?.water ?? 0));
+    expect(planOf(firstGreenhouse(parched), content).substrate.water).toBe(
+      20 + (level?.water ?? 0),
+    );
   });
 
   it('leaves water and nutrients to the plants without fertigation', () => {
     const greenhouse = firstGreenhouse(newTestGame());
     const drinking = { growth: 4, water: 3, nutrients: 0.2 };
-    expect(planClimate(greenhouse, drinking, content).substrate).toEqual({
+    expect(planWith(greenhouse, drinking, content).substrate).toEqual({
       water: greenhouse.climate.water - 3,
       nutrients: greenhouse.climate.nutrients - 0.2,
     });
   });
 
   it('adds up energy and supplies into the running costs', () => {
-    const plan = greenhousePlan(
+    const plan = planOf(
       greenhouseOf(['heater', 'co2', 'lights', 'fogger']),
       content,
     );

@@ -175,6 +175,39 @@ test('buys a heater, and the greenhouse warms up for the cucumbers', async ({
   await snapshot(page, info, 'warm-greenhouse');
 });
 
+// Phase 7: solar panels make power by day, and the energy panel shows the
+// flows and what they cost.
+test('builds solar panels at the energy shed, which sell power by day', async ({
+  page,
+}, info) => {
+  // Taps with the clock installed: see the harvest test above.
+  test.slow();
+  await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
+  await openGame(page);
+  await tap(page, buildingOnScreen(page, 'energy'));
+  const window = page.getByRole('dialog', { name: 'Energy' });
+  await expect(window).toContainText('Night');
+  await window.getByRole('tab', { name: 'Build' }).click();
+  await window.getByRole('button', { name: /^Build Solar panels/ }).click();
+  await expect(page.getByLabel('200 Volticoins')).toBeVisible();
+  await window.getByRole('tab', { name: 'Now' }).click();
+  await expect(
+    window.getByRole('group', { name: 'Solar panels' }),
+  ).toContainText('No sun now');
+
+  // Midday: 12 game hours later.
+  await page.clock.fastForward(3 * 60_000);
+  await expect(
+    window.getByRole('group', { name: 'Solar panels' }),
+  ).toContainText('Making power');
+  await expect(window.getByRole('group', { name: 'Grid' })).toContainText(
+    'Selling spare power',
+  );
+  await snapshot(page, info, 'energy-window');
+  await window.getByRole('button', { name: 'Close' }).click();
+  await snapshot(page, info, 'energy-site');
+});
+
 test('says land for sale comes later', async ({ page }) => {
   await openGame(page);
   await tap(page, forSaleSignOnScreen(page));

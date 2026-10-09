@@ -1,22 +1,24 @@
 import type { CropDef, CropId, GameContent } from '@voltiris/content';
 import {
-  greenhousePlan,
+  planHour,
   type ClimatePlan,
   type GameState,
   type Greenhouse,
 } from '@voltiris/sim';
 
 /**
- * What a greenhouse's equipment does in the coming hour, and whether it
- * runs: it stays off while the player's money does not cover its costs.
+ * What the first greenhouse's equipment does in the coming hour, and
+ * whether it runs: everything stays off while the money does not cover the
+ * hour.
  */
 export function equipmentPlan(
   game: GameState,
-  greenhouse: Greenhouse,
   content: GameContent,
 ): { readonly plan: ClimatePlan; readonly running: boolean } {
-  const plan = greenhousePlan(greenhouse, content);
-  return { plan, running: game.owed + plan.cost <= game.money };
+  const hour = planHour(game, content);
+  const plan = hour.plans[0];
+  if (!plan) throw new Error('The game has no greenhouse');
+  return { plan, running: hour.running };
 }
 
 /** Distinct crops that are still growing in a greenhouse. */

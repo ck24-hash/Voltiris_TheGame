@@ -1,7 +1,6 @@
 import type {
   CareConfig,
   EconomyConfig,
-  EnergyPricesConfig,
   GrowthConfig,
   MarketConfig,
   StorageConfig,
@@ -39,9 +38,4 @@ export const MARKET: MarketConfig = {
   volatility: 0.03,
   minSwing: 0.6,
   maxSwing: 1.6,
-};
-
-export const ENERGY_PRICES: EnergyPricesConfig = {
-  gas: 0.06,
-  power: 0.12,
 };

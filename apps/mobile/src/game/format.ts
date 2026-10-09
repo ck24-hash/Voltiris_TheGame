@@ -26,7 +26,7 @@ export function formatPrice(amount: number): string {
 
 /** "Day 4 · 14:00". */
 export function formatDayTime(cal: Calendar): string {
-  return `Day ${cal.day} · ${String(cal.hour).padStart(2, '0')}:00`;
+  return `Day ${cal.day} · ${formatHour(cal.hour)}`;
 }
 
 const SEASON_NAMES: Record<Season, string> = {
@@ -103,4 +103,20 @@ export function formatPerDay(perHour: number): string {
 /** Power, from the energy used in one hour: "3.2 kW". */
 export function formatKw(kwhPerHour: number): string {
   return `${kwhPerHour.toFixed(1)} kW`;
+}
+
+export function formatKwh(kwh: number): string {
+  return `${kwh.toFixed(1)} kWh`;
+}
+
+/** A cost with one decimal, negative when it earned: "4.2", "−1.3". */
+export function formatCost(amount: number): string {
+  const tenths = Math.round(amount * 10);
+  if (tenths === 0) return '0.0';
+  return `${tenths < 0 ? '−' : ''}${(Math.abs(tenths) / 10).toFixed(1)}`;
+}
+
+/** An hour of the day: "07:00". */
+export function formatHour(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
 }

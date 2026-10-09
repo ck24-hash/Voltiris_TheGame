@@ -1,5 +1,6 @@
 import type {
   CropId,
+  EnergyAsset,
   EquipmentKind,
   GameContent,
   SetpointId,
@@ -99,6 +100,8 @@ export interface GameStore {
     greenhouseId: string,
     upgrade: GreenhouseUpgrade,
   ) => CommandError | null;
+  /** Builds an energy asset, or upgrades it to its next level. */
+  readonly buyEnergy: (asset: EnergyAsset) => CommandError | null;
   readonly selectPlot: (selection: PlotSelection | null) => void;
   readonly openWindow: (window: GameWindow) => void;
   readonly closeWindow: () => void;
@@ -228,6 +231,9 @@ export function createGameStore(deps: GameStoreDeps): StoreApi<GameStore> {
           greenhouseId,
           upgrade,
         })),
+
+      buyEnergy: (asset) =>
+        run((meta) => ({ ...meta, type: 'BuyEnergy', asset })),
 
       selectPlot: (selection) => {
         set({ selection });

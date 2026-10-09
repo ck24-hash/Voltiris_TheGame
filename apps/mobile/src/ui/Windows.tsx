@@ -10,6 +10,7 @@ import { CROP_ICONS } from '../game/selectors';
 import { BUILDING_INFO } from './buildingInfo';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
+import { EnergyWindow } from './EnergyWindow';
 import { GreenhouseWindow } from './GreenhouseWindow';
 import { ConeIcon } from './icons';
 import { MarketWindow } from './MarketWindow';
@@ -29,6 +30,8 @@ export function Windows() {
       return <SettingsWindow />;
     case 'greenhouse':
       return <GreenhouseWindow />;
+    case 'energy':
+      return <EnergyWindow />;
     case 'market':
       return <MarketWindow />;
     case 'storage':
@@ -39,7 +42,6 @@ export function Windows() {
 }
 
 const BUILDING_TONES = {
-  energy: 'blue',
   village: 'green',
 } as const;
 

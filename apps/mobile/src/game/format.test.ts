@@ -4,8 +4,11 @@ import {
   formatCoins,
   formatCoinsLong,
   formatDayTime,
+  formatCost,
   formatGameHours,
+  formatHour,
   formatKw,
+  formatKwh,
   formatPercent,
   formatPerDay,
   formatPrice,
@@ -38,9 +41,21 @@ describe('money', () => {
     expect(formatPerDay(0.625)).toBe('15');
   });
 
-  it('shows power in kW', () => {
+  it('shows power in kW, and energy in kWh', () => {
     expect(formatKw(3.2)).toBe('3.2 kW');
     expect(formatKw(0)).toBe('0.0 kW');
+    expect(formatKwh(12.345)).toBe('12.3 kWh');
+  });
+
+  it('shows costs with one decimal, earnings with a minus', () => {
+    expect(formatCost(4.24)).toBe('4.2');
+    expect(formatCost(-1.26)).toBe('−1.3');
+    expect(formatCost(-0.01)).toBe('0.0');
+  });
+
+  it('shows an hour of the day', () => {
+    expect(formatHour(7)).toBe('07:00');
+    expect(formatHour(17)).toBe('17:00');
   });
 });
 

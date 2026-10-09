@@ -60,8 +60,13 @@ describe('createLayout', () => {
   it.each([4, 20])(
     'fits the greenhouse, buildings and path on the lot without overlaps (%i plots)',
     (plots) => {
-      const { lot, greenhouse, buildings, path } = createLayout(plots);
-      const things = [greenhouse, ...buildings.map((b) => b.footprint)];
+      const { lot, greenhouse, buildings, path, energyYard } =
+        createLayout(plots);
+      const things = [
+        greenhouse,
+        energyYard,
+        ...buildings.map((b) => b.footprint),
+      ];
       for (const [k, a] of things.entries()) {
         expect(contains(lot, a)).toBe(true);
         expect(overlaps(a, path), `path crosses ${k}`).toBe(false);
@@ -202,6 +207,13 @@ describe('targetAt', () => {
     }
   });
 
+  it('opens the energy shed from the yard beside it too', () => {
+    const { i, j, width, length } = layout.energyYard;
+    expect(
+      targetAt(layout, gridToWorld(i + width / 2, j + length / 2), none),
+    ).toEqual({ kind: 'building', id: 'energy' });
+  });
+
   it('finds the greenhouse from its floor, glass and roof around the plots', () => {
     const { i, j, width, length } = layout.greenhouse;
     const greenhouse = { kind: 'greenhouse' };
@@ -239,7 +251,7 @@ describe('targetAt', () => {
     expect(targetAt(layout, { x: sign.x, y: sign.y - 40 }, none)).toEqual({
       kind: 'forSale',
     });
-    expect(targetAt(layout, tileCenter({ i: 9, j: 8 }), none)).toBeNull();
+    expect(targetAt(layout, tileCenter({ i: 8, j: 8 }), none)).toBeNull();
   });
 });
 

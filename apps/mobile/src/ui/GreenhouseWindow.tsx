@@ -5,13 +5,8 @@ import {
   type SetpointId,
   type SetpointRange,
 } from '@voltiris/content';
-import {
-  serviceCost,
-  type CommandError,
-  type DeviceRun,
-  type Greenhouse,
-} from '@voltiris/sim';
-import { useState, type ReactNode } from 'react';
+import { serviceCost, type DeviceRun, type Greenhouse } from '@voltiris/sim';
+import { useState } from 'react';
 import { describeCommandError } from '../game/commandErrors';
 import { useGame } from '../game/context';
 import {
@@ -22,11 +17,15 @@ import {
 } from '../game/format';
 import { equipmentPlan } from '../game/selectors';
 import { cx } from './cx';
+import styles from './Equipment.module.css';
 import { deviceStatus, EQUIPMENT_INFO, SETPOINT_INFO } from './equipmentInfo';
 import { GameButton } from './GameButton';
 import { GameWindow } from './GameWindow';
-import styles from './GreenhouseWindow.module.css';
 import { ComputerIcon, EquipmentIcon, GlassIcon, SizeIcon } from './icons';
+import { Price } from './Price';
+import { Tabs } from './Tabs';
+import { UpgradeRow } from './UpgradeRow';
+import { useReport } from './useReport';
 import { VolticoinIcon } from './VolticoinIcon';
 
 const TABS = [
@@ -52,55 +51,19 @@ export function GreenhouseWindow() {
 
   return (
     <GameWindow title="Greenhouse" onClose={closeWindow}>
-      <div role="tablist" aria-label="Greenhouse" className={styles.tabs}>
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={cx(styles.tab, tab === id && styles.selected)}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div
-        role="tabpanel"
-        aria-label={TABS.find((t) => t.id === tab)?.label}
-        className={styles.panel}
-      >
+      <Tabs label="Greenhouse" tabs={TABS} value={tab} onChange={setTab}>
         {tab === 'equipment' && <EquipmentTab greenhouse={greenhouse} />}
         {tab === 'climate' && <ClimateTab greenhouse={greenhouse} />}
         {tab === 'upgrades' && <UpgradesTab greenhouse={greenhouse} />}
-      </div>
+      </Tabs>
     </GameWindow>
-  );
-}
-
-/** Shows the sim's refusal as an error toast, or `done` as a notice. */
-function useReport() {
-  const notify = useGame((s) => s.notify);
-  return (error: CommandError | null, done: string) => {
-    if (error) notify(describeCommandError(error), 'error');
-    else notify(done);
-  };
-}
-
-function Price({ amount }: { amount: number }) {
-  return (
-    <span className={styles.price}>
-      <VolticoinIcon size={13} />
-      {amount}
-    </span>
   );
 }
 
 function EquipmentTab({ greenhouse }: { greenhouse: Greenhouse }) {
   const game = useGame((s) => s.game);
   const content = useGame((s) => s.content);
-  const { plan, running } = equipmentPlan(game, greenhouse, content);
+  const { plan, running } = equipmentPlan(game, content);
   const fitted = EQUIPMENT_KINDS.some((kind) => greenhouse.equipment[kind]);
 
   return (
@@ -243,7 +206,7 @@ function ClimateTab({ greenhouse }: { greenhouse: Greenhouse }) {
   const setAutoControl = useGame((s) => s.setAutoControl);
   const notify = useGame((s) => s.notify);
   const report = useReport();
-  const { plan } = equipmentPlan(game, greenhouse, content);
+  const { plan } = equipmentPlan(game, content);
   const auto = greenhouse.computer && greenhouse.auto;
   const fitted = EQUIPMENT_KINDS.filter((kind) => greenhouse.equipment[kind]);
 
@@ -438,6 +401,7 @@ function UpgradesTab({ greenhouse }: { greenhouse: Greenhouse }) {
               }
         }
         buyLabel="Buy"
+        doneLabel="Installed"
         onBuy={() =>
           report(
             upgradeGreenhouse(greenhouse.id, 'computer'),
@@ -446,57 +410,5 @@ function UpgradesTab({ greenhouse }: { greenhouse: Greenhouse }) {
         }
       />
     </ul>
-  );
-}
-
-function UpgradeRow({
-  icon,
-  name,
-  now,
-  next,
-  buyLabel = 'Upgrade',
-  onBuy,
-}: {
-  icon: ReactNode;
-  name: string;
-  now: string;
-  next:
-    | { readonly name: string; readonly detail: string; readonly price: number }
-    | undefined;
-  buyLabel?: string;
-  onBuy: () => void;
-}) {
-  const money = useGame((s) => s.game.money);
-  return (
-    <li className={styles.row}>
-      <span className={cx(styles.icon, styles.fitted)}>{icon}</span>
-      <span className={styles.name}>
-        <strong>{name}</strong>
-        <span className={styles.muted}>{now}</span>
-        {next?.detail && (
-          <span className={styles.status}>
-            Next: {next.name}, {next.detail}
-          </span>
-        )}
-      </span>
-      <span className={styles.actions}>
-        {next ? (
-          <GameButton
-            small
-            tone="gold"
-            disabled={money < next.price}
-            aria-label={`${buyLabel} ${name}${next.name === name ? '' : `: ${next.name}`} (${next.price} Volticoins)`}
-            onClick={onBuy}
-          >
-            {buyLabel}
-            <Price amount={next.price} />
-          </GameButton>
-        ) : (
-          <span className={styles.top}>
-            {buyLabel === 'Buy' ? 'Installed' : 'Top level'}
-          </span>
-        )}
-      </span>
-    </li>
   );
 }

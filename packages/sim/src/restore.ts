@@ -5,12 +5,16 @@ import {
   SETPOINT_IDS,
   type Climate,
   type CropId,
+  type EnergyAsset,
   type EquipmentKind,
   type GameContent,
   type Setpoints,
 } from '@voltiris/content';
+import { levelAt } from './equipment';
 import {
   STATE_VERSION,
+  type Energy,
+  type EnergyDay,
   type Equipment,
   type GameState,
   type Greenhouse,
@@ -83,6 +87,28 @@ export const MIGRATIONS: Readonly<Record<number, Migration>> = {
             : greenhouse,
         )
       : old.greenhouses,
+  }),
+  // Phase 7: just the grid, an empty battery and nothing counted yet.
+  3: (old) => ({
+    ...old,
+    version: 4,
+    energy: {
+      solar: 0,
+      battery: 0,
+      chp: 0,
+      stored: 0,
+      today: {
+        solar: 0,
+        chp: 0,
+        bought: 0,
+        sold: 0,
+        power: 0,
+        heating: 0,
+        co2: 0,
+        chpFuel: 0,
+      },
+      yesterday: null,
+    },
   }),
 };
 
@@ -274,6 +300,50 @@ function readGameState(raw: RawState, content: GameContent): GameState {
     ),
     storage: readStorage(raw.storage, content),
     market: readMarket(raw.market),
+    energy: readEnergy(raw.energy, content),
+  };
+}
+
+function readEnergy(raw: unknown, content: GameContent): Energy {
+  const energy = record(raw, 'energy');
+  /** 0 (none) up to the asset's top level. */
+  const assetLevel = (asset: EnergyAsset) => {
+    const n = wholeNumber(energy[asset], `energy.${asset}`, 0);
+    const top = content.energy[asset].length;
+    if (n > top) invalid(`energy.${asset}`, `at most ${top}`);
+    return n;
+  };
+  const battery = assetLevel('battery');
+  const capacity =
+    battery > 0 ? levelAt(content.energy.battery, battery).capacity : 0;
+  const stored = number(energy.stored, 'energy.stored', 0);
+  if (stored > capacity) invalid('energy.stored', `at most ${capacity}`);
+  return {
+    solar: assetLevel('solar'),
+    battery,
+    chp: assetLevel('chp'),
+    stored,
+    today: readEnergyDay(energy.today, 'energy.today'),
+    yesterday:
+      energy.yesterday === null
+        ? null
+        : readEnergyDay(energy.yesterday, 'energy.yesterday'),
+  };
+}
+
+function readEnergyDay(raw: unknown, path: string): EnergyDay {
+  const day = record(raw, path);
+  const kwh = (key: string) => number(day[key], `${path}.${key}`, 0);
+  const coins = (key: string) => number(day[key], `${path}.${key}`);
+  return {
+    solar: kwh('solar'),
+    chp: kwh('chp'),
+    bought: kwh('bought'),
+    sold: kwh('sold'),
+    power: coins('power'),
+    heating: coins('heating'),
+    co2: coins('co2'),
+    chpFuel: coins('chpFuel'),
   };
 }
 

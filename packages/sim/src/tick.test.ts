@@ -1,6 +1,7 @@
 import { CROP_IDS, defaultContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { createManualClock } from './clock';
+import { initialEnergy } from './energy';
 import { createGame } from './newGame';
 import { STATE_VERSION, type GameState } from './state';
 import { advance, maxCatchUpTicks, tick } from './tick';
@@ -37,6 +38,7 @@ describe('createGame', () => {
     expect(state.clock).toEqual({ gameHour: 0, lastTickAt: clock.now() });
     expect(state.money).toBe(economy.startingMoney);
     expect(state.owed).toBe(0);
+    expect(state.energy).toEqual(initialEnergy());
     expect(state.greenhouses).toHaveLength(1);
 
     const greenhouse = firstGreenhouse(state);

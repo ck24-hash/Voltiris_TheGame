@@ -25,8 +25,8 @@ export const BUILDING_INFO: Record<BuildingId, BuildingInfo> = {
   energy: {
     title: 'Energy',
     building: 'Energy shed',
-    text: 'Power your greenhouses with the grid, solar panels, batteries and Voltiris modules.',
-    soon: true,
+    text: 'Power for your greenhouses: the grid, solar panels, a battery and a CHP unit.',
+    soon: false,
   },
   village: {
     title: 'Village',

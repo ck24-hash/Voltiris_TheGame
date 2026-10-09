@@ -1,5 +1,6 @@
 import type {
   ClimateVariable,
+  EnergyAsset,
   EquipmentKind,
   SetpointId,
 } from '@voltiris/content';
@@ -45,6 +46,21 @@ export function deviceStatus(kind: EquipmentKind, load: number): string {
       return working ? 'Topping up' : 'Idle: watered and fed';
   }
 }
+
+export const ENERGY_INFO: Record<EnergyAsset, EquipmentInfo> = {
+  solar: {
+    name: 'Solar panels',
+    does: 'Make power while the sun is up, most at midday.',
+  },
+  battery: {
+    name: 'Battery',
+    does: 'Keeps spare solar and cheap night power for the dear evening.',
+  },
+  chp: {
+    name: 'CHP unit',
+    does: 'Burns gas for power; its heat warms the greenhouse and its CO₂ feeds the plants. Runs when it saves money.',
+  },
+};
 
 interface SetpointInfo {
   readonly label: string;

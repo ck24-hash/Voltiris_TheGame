@@ -5,7 +5,8 @@ import { at, cone, flat, INK, isoBox, lerp, onFrontWall } from './shapes';
 
 // Placeholder toon buildings, drawn in world coordinates on their footprint.
 // Each faces the road (+j). Traffic cones stand in front of the ones whose
-// game modes open in later phases.
+// game modes open in later phases. The energy shed changes with what is
+// built, so `drawEnergySite` draws it.
 
 export function drawBuilding(
   g: Graphics,
@@ -21,7 +22,6 @@ export function drawBuilding(
       drawStorageBarn(g, f);
       break;
     case 'energy':
-      drawEnergyShed(g, f);
       break;
     case 'village':
       drawTownHall(g, f);
@@ -194,71 +194,6 @@ function drawStorageBarn(g: Graphics, f: Footprint): void {
   crate(f.i + 0.04, f.j + 1.7);
   crate(f.i + 1.64, f.j + 1.7);
   crate(f.i + 1.64, f.j + 1.7, 18);
-}
-
-function drawEnergyShed(g: Graphics, f: Footprint): void {
-  const shed = { i: f.i + 0.2, j: f.j + 0.3, width: 1.6, length: 1.3 };
-  isoBox(g, shed, 56, {
-    left: COLORS.shedWall,
-    right: COLORS.shedWallDark,
-    top: COLORS.shedRoof,
-  });
-
-  // Solar panel on the roof, tilted towards the sun.
-  const backLeft = inside(f, 0.2, 0.25, 84);
-  const backRight = inside(f, 0.8, 0.25, 84);
-  const frontRight = inside(f, 0.8, 0.75, 60);
-  const frontLeft = inside(f, 0.2, 0.75, 60);
-  for (const leg of [backLeft, backRight]) {
-    g.moveTo(leg.x, leg.y)
-      .lineTo(leg.x, leg.y + 24)
-      .stroke({ color: COLORS.metalDark, width: 3 });
-  }
-  g.poly(flat([backLeft, backRight, frontRight, frontLeft]))
-    .fill(COLORS.solarPanel)
-    .stroke(INK);
-  const cells: [typeof backLeft, typeof backLeft][] = [
-    [lerp(backLeft, backRight, 1 / 3), lerp(frontLeft, frontRight, 1 / 3)],
-    [lerp(backLeft, backRight, 2 / 3), lerp(frontLeft, frontRight, 2 / 3)],
-    [lerp(backLeft, frontLeft, 0.5), lerp(backRight, frontRight, 0.5)],
-  ];
-  for (const [a, b] of cells) g.moveTo(a.x, a.y).lineTo(b.x, b.y);
-  g.stroke({ color: COLORS.solarLine, width: 1.5 });
-
-  // Lightning sign on the front wall, and a door.
-  const sign = onFrontWall(shed, 0.32, 34);
-  g.circle(sign.x, sign.y, 12).fill(COLORS.bolt).stroke(INK);
-  g.poly([
-    sign.x + 1.5,
-    sign.y - 8,
-    sign.x - 5,
-    sign.y + 1,
-    sign.x - 0.5,
-    sign.y + 1,
-    sign.x - 2,
-    sign.y + 8,
-    sign.x + 5,
-    sign.y - 1,
-    sign.x + 0.5,
-    sign.y - 1,
-  ]).fill(COLORS.ink);
-  g.poly(
-    flat([
-      onFrontWall(shed, 0.6, 0),
-      onFrontWall(shed, 0.82, 0),
-      onFrontWall(shed, 0.82, 38),
-      onFrontWall(shed, 0.6, 38),
-    ]),
-  )
-    .fill(COLORS.shedRoof)
-    .stroke(INK);
-
-  // A battery cabinet beside the door.
-  isoBox(g, { i: f.i + 1.35, j: f.j + 1.68, width: 0.45, length: 0.25 }, 26, {
-    left: COLORS.battery,
-    right: COLORS.batteryDark,
-    top: COLORS.battery,
-  });
 }
 
 function drawTownHall(g: Graphics, f: Footprint): void {

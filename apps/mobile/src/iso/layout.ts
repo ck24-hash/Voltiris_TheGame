@@ -62,6 +62,8 @@ export interface SceneLayout {
    * every plot, so it never hides a plant.
    */
   readonly equipmentSpots: Readonly<Record<FloorEquipment, GridPoint>>;
+  /** Beside the energy shed: the solar field and the CHP unit. */
+  readonly energyYard: Footprint;
   readonly buildings: readonly Building[];
   /** The road runs along i forever, between these j values. */
   readonly road: { readonly j0: number; readonly j1: number };
@@ -92,10 +94,11 @@ export function createLayout(plotCount: number): SceneLayout {
       co2: { i: greenhouse.i + 1, j: greenhouse.j },
       fogger: { i: greenhouse.i + 2, j: greenhouse.j },
     },
+    energyYard: { i: 11, j: greenhouse.j + 2, width: 2, length: 2 },
     // Placed so no name tag hangs over another building: the market and the
     // storage barn by the road, the energy shed beside the greenhouse it
-    // powers, the town hall at the back. The middle of the front yard stays
-    // free for later.
+    // powers (its yard in front, clear of the barn), the town hall at the
+    // back.
     buildings: [
       {
         id: 'energy',
@@ -104,7 +107,7 @@ export function createLayout(plotCount: number): SceneLayout {
       },
       {
         id: 'storage',
-        footprint: { i: 11, j: front, width: 2, length: 2 },
+        footprint: { i: 9, j: front, width: 2, length: 2 },
         height: 110,
       },
       {
@@ -206,6 +209,9 @@ export type WorldTarget =
   | { readonly kind: 'greenhouse' }
   | { readonly kind: 'forSale' };
 
+/** How tall the things in the energy yard stand, for taps. */
+const ENERGY_YARD_HEIGHT = 50;
+
 /** Half the size of a "For sale" sign's tap area, around its board. */
 const SIGN_HIT = { halfWidth: 46, top: 72, bottom: 10 } as const;
 
@@ -228,6 +234,9 @@ export function targetAt(
     if (insidePolygon(p, boxOutline(building.footprint, building.height))) {
       return { kind: 'building', id: building.id };
     }
+  }
+  if (insidePolygon(p, boxOutline(layout.energyYard, ENERGY_YARD_HEIGHT))) {
+    return { kind: 'building', id: 'energy' };
   }
 
   if (insidePolygon(p, greenhouseOutline(layout.greenhouse))) {

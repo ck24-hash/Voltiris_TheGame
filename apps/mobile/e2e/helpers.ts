@@ -48,7 +48,7 @@ export function greenhouseOnScreen(page: Page): Point {
 
 /** Lawn in the front yard, with nothing on it. */
 export function lawnOnScreen(page: Page): Point {
-  return openingView(page)(tileCenter({ i: 9, j: 8 }));
+  return openingView(page)(tileCenter({ i: 8, j: 8 }));
 }
 
 export function forSaleSignOnScreen(page: Page): Point {

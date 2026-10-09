@@ -25,6 +25,32 @@ export interface Calendar {
   readonly hour: number;
 }
 
+/**
+ * A value that changes with the seasons, at a game hour. Each season's value
+ * holds at its middle; in between, it moves in a straight line towards the
+ * next season's. Uses only + − × ÷, so every device gets the same value.
+ */
+export function seasonalValue(
+  values: Readonly<Record<Season, number>>,
+  gameHour: number,
+  time: TimeConfig,
+): number {
+  const seasonHours = time.daysPerSeason * HOURS_PER_DAY;
+  const yearHours = seasonHours * SEASONS.length;
+  // Seasons since the middle of spring, within one year: from -0.5 to 3.5.
+  const t = (gameHour % yearHours) / seasonHours - 0.5;
+  const from = Math.floor(t);
+  const a = values[seasonAt(from)];
+  const b = values[seasonAt(from + 1)];
+  return a + (b - a) * (t - from);
+}
+
+function seasonAt(index: number): Season {
+  const season = SEASONS[(index + SEASONS.length) % SEASONS.length];
+  if (!season) throw new RangeError(`No season at ${index}`);
+  return season;
+}
+
 /** The game starts at 00:00 on day 1 of spring, year 1. */
 export function getCalendar(gameHour: number, time: TimeConfig): Calendar {
   const dayIndex = Math.floor(gameHour / HOURS_PER_DAY);

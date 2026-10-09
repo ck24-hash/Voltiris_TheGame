@@ -1,5 +1,6 @@
 import type {
   CropId,
+  EnergyAsset,
   EquipmentKind,
   GameContent,
   SetpointId,
@@ -10,6 +11,7 @@ import {
   updateGreenhouse,
   type Failure,
 } from './commandHelpers';
+import { buyEnergy } from './energyCommands';
 import type { GreenhouseUpgrade } from './equipment';
 import {
   buyEquipment,
@@ -96,6 +98,12 @@ export interface SetAutoControlCommand extends CommandMeta {
   readonly auto: boolean;
 }
 
+/** Builds an energy asset, or upgrades it to its next level. */
+export interface BuyEnergyCommand extends CommandMeta {
+  readonly type: 'BuyEnergy';
+  readonly asset: EnergyAsset;
+}
+
 /** Buys the greenhouse's next glass or size, or a climate computer. */
 export interface UpgradeGreenhouseCommand extends CommandMeta {
   readonly type: 'UpgradeGreenhouse';
@@ -113,7 +121,8 @@ export type Command =
   | ServiceEquipmentCommand
   | SetSetpointCommand
   | SetAutoControlCommand
-  | UpgradeGreenhouseCommand;
+  | UpgradeGreenhouseCommand
+  | BuyEnergyCommand;
 
 export type CommandErrorCode =
   | 'UNKNOWN_COMMAND'
@@ -175,6 +184,8 @@ export function applyCommand(
       return setAutoControl(state, command);
     case 'UpgradeGreenhouse':
       return upgradeGreenhouse(state, command, content);
+    case 'BuyEnergy':
+      return buyEnergy(state, command, content);
     default: {
       // Unreachable for typed callers; commands may come from untrusted input later.
       const { type } = command as { type?: unknown };

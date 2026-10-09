@@ -141,6 +141,8 @@ export type SceneItem =
   | { readonly kind: 'fence'; readonly segment: FenceSegment }
   | { readonly kind: 'building'; readonly building: Building }
   | { readonly kind: 'greenhouse' }
+  /** The energy shed and its yard: they change with what is built. */
+  | { readonly kind: 'energy' }
   | { readonly kind: 'sign'; readonly tile: GridPoint };
 
 const STANDING_SIZE: Record<StandingKind, number> = {
@@ -170,9 +172,25 @@ function itemBox(item: SceneItem, layout: SceneLayout): Box {
       return footprintBox(item.building.footprint);
     case 'greenhouse':
       return footprintBox(layout.greenhouse);
+    case 'energy': {
+      const shed = footprintBox(energyShed(layout).footprint);
+      const yard = footprintBox(layout.energyYard);
+      return {
+        i0: Math.min(shed.i0, yard.i0),
+        i1: Math.max(shed.i1, yard.i1),
+        j0: Math.min(shed.j0, yard.j0),
+        j1: Math.max(shed.j1, yard.j1),
+      };
+    }
     case 'sign':
       return boxAround(item.tile.i + 0.5, item.tile.j + 0.5, 0.4);
   }
+}
+
+export function energyShed(layout: SceneLayout): Building {
+  const shed = layout.buildings.find((b) => b.id === 'energy');
+  if (!shed) throw new Error('The layout has no energy shed');
+  return shed;
 }
 
 /** Everything standing in the world, back to front. */
@@ -182,10 +200,10 @@ export function sceneItems(
 ): SceneItem[] {
   const items: SceneItem[] = [
     { kind: 'greenhouse' },
-    ...layout.buildings.map((building) => ({
-      kind: 'building' as const,
-      building,
-    })),
+    { kind: 'energy' },
+    ...layout.buildings
+      .filter((building) => building.id !== 'energy')
+      .map((building) => ({ kind: 'building' as const, building })),
     ...layout.forSale.map((tile) => ({ kind: 'sign' as const, tile })),
     ...fenceSegments(layout).map((segment) => ({
       kind: 'fence' as const,

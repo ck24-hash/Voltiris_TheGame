@@ -10,6 +10,13 @@ import {
   type ClimatePlan,
 } from './climate';
 import type { Clock } from './clock';
+import {
+  afterHour,
+  hourPrices,
+  runEnergy,
+  type EnergyDemand,
+  type EnergyHour,
+} from './energy';
 import { equipmentLevel } from './equipment';
 import { growPlanting } from './growth';
 import { tickMarket } from './market';
@@ -24,39 +31,83 @@ import type {
 import { removeSpoiled } from './storage';
 import { ticksDue } from './time';
 
+/** What the coming hour does: every greenhouse's plan, and the power supply. */
+export interface HourPlan {
+  /** False when the money does not cover the hour: all equipment stays off. */
+  readonly running: boolean;
+  /** One plan per greenhouse, in the same order. */
+  readonly plans: readonly ClimatePlan[];
+  readonly energy: EnergyHour;
+  /** The hour's bill: energy and supplies. Negative when selling earns more. */
+  readonly cost: number;
+}
+
 /**
- * Advances the game by exactly one tick (one in-game hour). Each greenhouse's
- * equipment runs only while the player's money covers everything owed:
- * whole Volticoins are paid every hour, and the fractions carry over.
+ * Plans the hour that starts now. The equipment runs only while the money
+ * covers everything owed; otherwise it all stays off, and the solar panels
+ * and the battery still run (they cost nothing, and spare power sells).
+ */
+export function planHour(state: GameState, content: GameContent): HourPlan {
+  const { gameHour } = state.clock;
+  const prices = hourPrices(gameHour, content);
+  // The plants grow the same whether the equipment runs or not.
+  const growing = state.greenhouses.map((greenhouse) => ({
+    greenhouse,
+    activity: plantActivity(greenhouse, content),
+  }));
+  const plan = (running: boolean): HourPlan => {
+    const plans = growing.map(({ greenhouse, activity }) =>
+      planClimate(greenhouse, activity, content, prices, running),
+    );
+    const energy = runEnergy(
+      state.energy,
+      energyDemand(plans),
+      gameHour,
+      content,
+      { gridCharging: running },
+    );
+    const supplies = plans.reduce((sum, p) => sum + p.supplies, 0);
+    return { running, plans, energy, cost: energy.total + supplies };
+  };
+  const running = plan(true);
+  return state.owed + running.cost <= state.money ? running : plan(false);
+}
+
+/** What the greenhouses' plans need from the energy system. */
+function energyDemand(plans: readonly ClimatePlan[]): EnergyDemand {
+  return {
+    power: plans.reduce((sum, p) => sum + p.power, 0),
+    heat: plans.flatMap((p) => (p.heat ? [p.heat] : [])),
+    co2: plans.flatMap((p) => (p.co2 ? [p.co2] : [])),
+  };
+}
+
+/**
+ * Advances the game by exactly one tick (one in-game hour). The hour's bill
+ * is paid in whole Volticoins, and the fraction carries over in `owed`;
+ * selling spare power can make it a payment to the player.
  */
 export function tick(state: GameState, content: GameContent): GameState {
   const gameHour = state.clock.gameHour + 1;
   const rng = createRng(state.rng);
   const market = tickMarket(state.market, rng, content.market);
-  let { money, owed } = state;
-  const greenhouses = state.greenhouses.map((greenhouse) => {
-    const activity = plantActivity(greenhouse, content);
-    let plan = planClimate(greenhouse, activity, content);
-    const due = owed + plan.cost;
-    if (due > money) {
-      // Not enough money: the equipment stays off this hour.
-      plan = planClimate(greenhouse, activity, content, false);
-    } else {
-      const pay = Math.floor(due);
-      money -= pay;
-      owed = due - pay;
-    }
-    return tickGreenhouse(greenhouse, plan, gameHour, content);
-  });
+  const hour = planHour(state, content);
+  const due = state.owed + hour.cost;
+  const pay = Math.floor(due);
   return {
     ...state,
     clock: { ...state.clock, gameHour },
     rng: rng.snapshot(),
-    money,
-    owed,
-    greenhouses,
+    money: state.money - pay,
+    owed: due - pay,
+    greenhouses: state.greenhouses.map((greenhouse, k) => {
+      const plan = hour.plans[k];
+      if (!plan) throw new Error(`No plan for greenhouse ${k}`);
+      return tickGreenhouse(greenhouse, plan, gameHour, content);
+    }),
     storage: removeSpoiled(state.storage, gameHour, content),
     market,
+    energy: afterHour(state.energy, hour.energy, state.clock.gameHour),
   };
 }
 

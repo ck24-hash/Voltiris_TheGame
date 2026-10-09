@@ -226,20 +226,14 @@ describe('plot bubble', () => {
 });
 
 describe('buildings', () => {
-  it.each([
-    ['energy', 'Energy', 'Energy shed'],
-    ['village', 'Village', 'Town hall'],
-  ] as const)(
-    'the %s building is under construction',
-    (id, title, building) => {
-      const { tapBuilding } = renderApp();
-      tapBuilding(id);
-      const window = screen.getByRole('dialog', { name: title });
-      expect(within(window).getByText(building)).toBeDefined();
-      expect(within(window).getByText('Under construction')).toBeDefined();
-      expect(screen.getByTestId('game-canvas')).toBeDefined();
-    },
-  );
+  it('the town hall is under construction', () => {
+    const { tapBuilding } = renderApp();
+    tapBuilding('village');
+    const window = screen.getByRole('dialog', { name: 'Village' });
+    expect(within(window).getByText('Town hall')).toBeDefined();
+    expect(within(window).getByText('Under construction')).toBeDefined();
+    expect(screen.getByTestId('game-canvas')).toBeDefined();
+  });
 
   it('the storage shows each harvest and how fresh it still is', async () => {
     const user = userEvent.setup();
@@ -318,7 +312,7 @@ describe('buildings', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).toBeNull();
 
-    tapBuilding('energy');
+    tapBuilding('village');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -519,6 +513,84 @@ describe('greenhouse', () => {
     expect(within(window).getByRole('alert')).toHaveTextContent(
       'Not enough Volticoins: the equipment is off.',
     );
+  });
+});
+
+describe('energy', () => {
+  function flow(window: HTMLElement, name: string) {
+    return within(window).getByRole('group', { name });
+  }
+
+  it('shows where the power comes from this hour, and its price', () => {
+    const { tapBuilding } = renderApp();
+    tapBuilding('energy');
+    const window = screen.getByRole('dialog', { name: 'Energy' });
+    // The game starts at midnight: the night tariff, nothing to power.
+    expect(window).toHaveTextContent('Night');
+    expect(window).toHaveTextContent('Day from 07:00');
+    expect(flow(window, 'Solar panels')).toHaveTextContent('None built yet');
+    expect(flow(window, 'Grid')).toHaveTextContent('Nothing bought or sold');
+  });
+
+  it('builds solar panels that make power by day, and sells the spare', async () => {
+    const user = userEvent.setup();
+    const { store, tapBuilding, runTicks } = renderApp();
+    runTicks(0);
+    tapBuilding('energy');
+    const window = screen.getByRole('dialog', { name: 'Energy' });
+    await user.click(within(window).getByRole('tab', { name: 'Build' }));
+    await user.click(
+      within(window).getByRole('button', {
+        name: 'Build Solar panels: Rooftop panels (300 Volticoins)',
+      }),
+    );
+    expect(store.getState().game.energy.solar).toBe(1);
+    expect(screen.getByLabelText('200 Volticoins')).toBeDefined();
+    expect(
+      within(window).getByText('Rooftop panels: 3 kW at midday'),
+    ).toBeDefined();
+
+    await user.click(within(window).getByRole('tab', { name: 'Now' }));
+    expect(flow(window, 'Solar panels')).toHaveTextContent('No sun now');
+    runTicks(12);
+    expect(flow(window, 'Solar panels')).toHaveTextContent('3.0 kW');
+    expect(flow(window, 'Grid')).toHaveTextContent('Selling spare power');
+    expect(window).toHaveTextContent('This hour’s energy earns');
+  });
+
+  it('fills a battery from cheap night power', () => {
+    const { store, tapBuilding, runTicks } = renderApp();
+    runTicks(0);
+    act(() => {
+      store.getState().buyEnergy('battery');
+    });
+    tapBuilding('energy');
+    const window = screen.getByRole('dialog', { name: 'Energy' });
+    expect(flow(window, 'Battery')).toHaveTextContent('Charging');
+    runTicks(3);
+    const meter = within(window).getByRole('meter', { name: 'Battery charge' });
+    expect(Number(meter.getAttribute('aria-valuenow'))).toBeGreaterThan(5);
+  });
+
+  it('adds up the day’s costs, and keeps yesterday’s', async () => {
+    const user = userEvent.setup();
+    const { store, tapBuilding, runTicks } = renderApp();
+    runTicks(0);
+    act(() => {
+      store.getState().buyEquipment(firstGreenhouseOf(store).id, 'lights');
+    });
+    tapBuilding('energy');
+    const window = screen.getByRole('dialog', { name: 'Energy' });
+    await user.click(within(window).getByRole('tab', { name: 'Costs' }));
+    const grid = () =>
+      within(window).getByRole('row', { name: /^Power from the grid/ });
+    expect(grid()).toHaveTextContent('–');
+
+    runTicks(24);
+    const yesterday = store.getState().game.energy.yesterday;
+    expect(yesterday?.power).toBeGreaterThan(0);
+    expect(grid()).not.toHaveTextContent('–');
+    expect(within(window).getByRole('row', { name: /^Total/ })).toBeDefined();
   });
 });
 

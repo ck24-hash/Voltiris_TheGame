@@ -119,6 +119,14 @@ describe('game store', () => {
     expect(store.getState().checkpoint).toBe(2);
   });
 
+  it('builds energy assets through commands', () => {
+    const { store } = createTestStore();
+    expect(store.getState().buyEnergy('solar')).toBeNull();
+    expect(store.getState().buyEnergy('chp')?.code).toBe('NOT_ENOUGH_MONEY');
+    expect(store.getState().game.energy.solar).toBe(1);
+    expect(store.getState().checkpoint).toBe(1);
+  });
+
   it('asks for a save after every accepted command, not a rejected one', () => {
     const { store } = createTestStore();
     const greenhouse = firstGreenhouseOf(store);

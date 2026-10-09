@@ -3,6 +3,7 @@ import {
   AIR_VARIABLES,
   CLIMATE_VARIABLES,
   CROP_IDS,
+  ENERGY_ASSETS,
   EQUIPMENT_KINDS,
   EQUIPMENT_SETPOINTS,
   SEASONS,
@@ -150,6 +151,62 @@ describe('equipment', () => {
     const pump = equipment.levels.heater[2];
     expect(pump?.efficiency).toBeGreaterThan(1);
     expect(pump?.exhaustCo2).toBe(0);
+  });
+});
+
+describe('energy', () => {
+  const { grid, sun, prices } = defaultContent.energy;
+
+  it('has a tariff from midnight, band after band through the day', () => {
+    expect(grid.tariff[0]?.from).toBe(0);
+    for (let k = 1; k < grid.tariff.length; k++) {
+      expect(grid.tariff[k]?.from).toBeGreaterThan(
+        grid.tariff[k - 1]?.from ?? 0,
+      );
+    }
+    expect(grid.tariff.at(-1)?.from).toBeLessThan(24);
+    for (const band of grid.tariff) expect(band.price).toBeGreaterThan(0);
+    for (const season of SEASONS) {
+      expect(grid.seasonal[season]).toBeGreaterThan(0);
+    }
+  });
+
+  it('pays less for spare power than it charges', () => {
+    expect(grid.sellShare).toBeGreaterThan(0);
+    expect(grid.sellShare).toBeLessThan(1);
+  });
+
+  it('has the sun up for part of the day', () => {
+    expect(sun.rise).toBeGreaterThan(0);
+    expect(sun.set).toBeGreaterThan(sun.rise);
+    expect(sun.set).toBeLessThan(24);
+    expect(prices.gas).toBeGreaterThan(0);
+    expect(prices.biogas).toBeGreaterThan(0);
+  });
+
+  it.each(ENERGY_ASSETS)(
+    '%s levels cost whole coins, dearer each level',
+    (asset) => {
+      const levels = defaultContent.energy[asset];
+      expect(levels.length).toBeGreaterThan(0);
+      let previous = 0;
+      for (const level of levels) {
+        expect(Number.isInteger(level.price)).toBe(true);
+        expect(level.price).toBeGreaterThan(previous);
+        previous = level.price;
+      }
+    },
+  );
+
+  it('loses a little in the battery, and turns most CHP fuel into power and heat', () => {
+    for (const battery of defaultContent.energy.battery) {
+      expect(battery.efficiency).toBeGreaterThan(0);
+      expect(battery.efficiency).toBeLessThan(1);
+      expect(battery.rate).toBeLessThanOrEqual(battery.capacity);
+    }
+    for (const chp of defaultContent.energy.chp) {
+      expect(chp.power + chp.heat).toBeLessThan(chp.input);
+    }
   });
 });
 

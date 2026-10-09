@@ -1,16 +1,14 @@
 import {
   CROP_IDS,
-  SEASONS,
   type CropDef,
   type CropId,
   type GameContent,
   type MarketConfig,
-  type Season,
   type TimeConfig,
 } from '@voltiris/content';
 import type { Rng } from './rng';
 import type { Market } from './state';
-import { HOURS_PER_DAY } from './time';
+import { seasonalValue } from './time';
 
 // Prices use only + − × ÷ (no Math.sin or Math.exp), so every device
 // computes exactly the same prices from the same game.
@@ -25,30 +23,13 @@ export function initialMarket(): Market {
   };
 }
 
-/**
- * The crop's seasonal price multiplier at a game hour. Each season's value
- * holds at its middle; in between, the price moves in a straight line
- * towards the next season's.
- */
+/** The crop's seasonal price multiplier at a game hour (see `seasonalValue`). */
 export function seasonalFactor(
   crop: CropDef,
   gameHour: number,
   time: TimeConfig,
 ): number {
-  const seasonHours = time.daysPerSeason * HOURS_PER_DAY;
-  const yearHours = seasonHours * SEASONS.length;
-  // Seasons since the middle of spring, within one year: from -0.5 to 3.5.
-  const t = (gameHour % yearHours) / seasonHours - 0.5;
-  const from = Math.floor(t);
-  const a = crop.seasonalPrice[seasonAt(from)];
-  const b = crop.seasonalPrice[seasonAt(from + 1)];
-  return a + (b - a) * (t - from);
-}
-
-function seasonAt(index: number): Season {
-  const season = SEASONS[(index + SEASONS.length) % SEASONS.length];
-  if (!season) throw new RangeError(`No season at ${index}`);
-  return season;
+  return seasonalValue(crop.seasonalPrice, gameHour, time);
 }
 
 /** What one unit sells for now, at full quality and freshness. */

@@ -1,34 +1,4 @@
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 10px;
-  padding: 4px;
-  border-radius: 14px;
-  background: var(--cream-dark);
-}
-
-.tab {
-  flex: 1;
-  min-height: 34px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--wood-dark);
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.selected {
-  background: #fff;
-  box-shadow: 0 2px 0 var(--wood);
-  color: var(--green-dark);
-}
-
-.panel {
-  display: grid;
-  gap: 8px;
-}
+/* Shared by the greenhouse and energy windows: rows of things to buy. */
 
 .intro {
   margin: 0;

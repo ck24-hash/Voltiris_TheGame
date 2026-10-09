@@ -10,7 +10,7 @@ import type { RngState } from './rng';
  * Save schema version. Bump it and add a migration (with a test) whenever the
  * shape of GameState changes.
  */
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export interface GameState {
   readonly version: number;
@@ -28,6 +28,34 @@ export interface GameState {
   readonly greenhouses: readonly Greenhouse[];
   readonly storage: Storage;
   readonly market: Market;
+  readonly energy: Energy;
+}
+
+/** The power supply the greenhouses share: the grid, plus what the player builds. */
+export interface Energy {
+  /** Level of each asset; 0 when there is none. */
+  readonly solar: number;
+  readonly battery: number;
+  readonly chp: number;
+  /** kWh in the battery. */
+  readonly stored: number;
+  /** Energy and what it cost so far today (since 00:00). */
+  readonly today: EnergyDay;
+  /** The whole of yesterday; null on the first day. */
+  readonly yesterday: EnergyDay | null;
+}
+
+export interface EnergyDay {
+  /** kWh the solar panels and the CHP made, bought from and sold to the grid. */
+  readonly solar: number;
+  readonly chp: number;
+  readonly bought: number;
+  readonly sold: number;
+  /** Volticoins: the grid (bought less sold), heater gas, CO₂, CHP fuel. */
+  readonly power: number;
+  readonly heating: number;
+  readonly co2: number;
+  readonly chpFuel: number;
 }
 
 export interface Storage {

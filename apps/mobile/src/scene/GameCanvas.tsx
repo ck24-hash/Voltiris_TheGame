@@ -7,7 +7,9 @@ import {
 } from '@voltiris/content';
 import {
   growthProgress,
+  planHour,
   type ClimatePlan,
+  type Energy,
   type Greenhouse,
   type Planting,
 } from '@voltiris/sim';
@@ -20,7 +22,6 @@ import {
 } from 'pixi.js';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGame, useGameStore } from '../game/context';
-import { equipmentPlan } from '../game/selectors';
 import type { BubbleAnchor } from '../game/store';
 import {
   createLayout,
@@ -38,6 +39,7 @@ import {
   type Point,
 } from '../iso/projection';
 import {
+  energyShed,
   sceneItems,
   scatterScenery,
   type FlatKind,
@@ -46,6 +48,7 @@ import {
 } from '../iso/scenery';
 import { BUILDING_INFO } from '../ui/buildingInfo';
 import { drawBuilding } from './draw/buildings';
+import { drawEnergySite, type EnergyLook } from './draw/energy';
 import {
   drawEquipmentBack,
   drawEquipmentFront,
@@ -142,9 +145,15 @@ function equipmentLook(
   };
 }
 
+function energyLook(energy: Energy, chpOn: boolean): EnergyLook {
+  const { solar, battery, chp } = energy;
+  return { solar, battery, chp, chpOn };
+}
+
 type SceneRun =
   | { readonly kind: 'static'; readonly items: readonly SceneItem[] }
   | { readonly kind: 'greenhouse' }
+  | { readonly kind: 'energy' }
   | { readonly kind: 'sign'; readonly tile: GridPoint };
 
 /** Back-to-front scene, with neighbouring static items merged into one drawing. */
@@ -153,7 +162,12 @@ function buildScene(layout: SceneLayout) {
   const items = sceneItems(layout, standing);
   const runs: SceneRun[] = [];
   for (const item of items) {
-    if (item.kind === 'greenhouse' || item.kind === 'sign') {
+    // The greenhouse, the energy site and the signs draw themselves.
+    if (
+      item.kind === 'greenhouse' ||
+      item.kind === 'energy' ||
+      item.kind === 'sign'
+    ) {
       runs.push(item);
       continue;
     }
@@ -169,10 +183,15 @@ function buildScene(layout: SceneLayout) {
 type LabelId = BuildingId | 'greenhouse';
 
 export function GameCanvas({ debug = false }: { debug?: boolean }) {
-  const greenhouse = useGame((s) => s.game.greenhouses[0]);
-  const crops = useGame((s) => s.content.crops);
+  const game = useGame((s) => s.game);
+  const content = useGame((s) => s.content);
+  const greenhouse = game.greenhouses[0];
+  const { crops } = content;
   const selectedPlotId = useGame((s) => s.selection?.plotId ?? null);
   const store = useGameStore();
+  // What the equipment and the energy system do this hour, for the drawings.
+  const hour = useMemo(() => planHour(game, content), [game, content]);
+  const plan = hour.plans[0];
 
   const plotCount = greenhouse?.plots.length ?? 0;
   const layout = useMemo(() => createLayout(plotCount), [plotCount]);
@@ -260,15 +279,24 @@ export function GameCanvas({ debug = false }: { debug?: boolean }) {
               case 'static':
                 return <StaticRun key={k} items={run.items} />;
               case 'greenhouse':
-                return greenhouse ? (
+                return greenhouse && plan ? (
                   <GreenhouseView
                     key={k}
                     greenhouse={greenhouse}
                     crops={crops}
                     layout={layout}
                     selectedPlotId={selectedPlotId}
+                    look={equipmentLook(greenhouse, plan, hour.running)}
                   />
                 ) : null;
+              case 'energy':
+                return (
+                  <EnergyView
+                    key={k}
+                    layout={layout}
+                    look={energyLook(game.energy, hour.energy.chp > 0)}
+                  />
+                );
               case 'sign':
                 return <ForSaleSign key={k} tile={run.tile} />;
             }
@@ -375,16 +403,14 @@ function GreenhouseView({
   crops,
   layout,
   selectedPlotId,
+  look,
 }: {
   greenhouse: Greenhouse;
   crops: Readonly<Record<CropId, CropDef>>;
   layout: SceneLayout;
   selectedPlotId: string | null;
+  look: EquipmentLook;
 }) {
-  const game = useGame((s) => s.game);
-  const content = useGame((s) => s.content);
-  const { plan, running } = equipmentPlan(game, greenhouse, content);
-  const look = equipmentLook(greenhouse, plan, running);
   const plots = greenhouse.plots
     .flatMap((plot, index) => {
       const tile = layout.plots[index];
@@ -480,6 +506,36 @@ const EquipmentFront = memo(function EquipmentFront({
     <pixiGraphics draw={(g: Graphics) => drawEquipmentFront(g, layout, look)} />
   );
 }, sameEquipment);
+
+/** The energy shed and its yard; redraws only when they change. */
+const EnergyView = memo(
+  function EnergyView({
+    layout,
+    look,
+  }: {
+    layout: SceneLayout;
+    look: EnergyLook;
+  }) {
+    return (
+      <pixiGraphics
+        draw={(g: Graphics) =>
+          drawEnergySite(
+            g,
+            energyShed(layout).footprint,
+            layout.energyYard,
+            look,
+          )
+        }
+      />
+    );
+  },
+  (a, b) =>
+    a.layout === b.layout &&
+    a.look.solar === b.look.solar &&
+    a.look.battery === b.look.battery &&
+    a.look.chp === b.look.chp &&
+    a.look.chpOn === b.look.chpOn,
+);
 
 const PlotView = memo(function PlotView({
   tile,

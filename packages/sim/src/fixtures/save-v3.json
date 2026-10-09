@@ -1,0 +1,66 @@
+{
+  "version": 3,
+  "playerId": "6f1c2a9e-3b7d-4c55-9a10-2d4e8b7f0c31",
+  "clock": { "gameHour": 1210, "lastTickAt": 1775601600000 },
+  "rng": { "seed": 1234, "state": 2718281828 },
+  "money": 913,
+  "owed": 0.375,
+  "greenhouses": [
+    {
+      "id": "0b9a4c7e-5d21-4f3a-8e6b-1c2d3e4f5a6b",
+      "climate": {
+        "temperature": 23,
+        "humidity": 74.2,
+        "co2": 798.5,
+        "light": 400,
+        "water": 61.3,
+        "nutrients": 2.38
+      },
+      "plots": [
+        {
+          "id": "1a2b3c4d-0000-4000-8000-000000000001",
+          "planting": {
+            "status": "growing",
+            "cropId": "cucumber",
+            "plantedAtHour": 1200,
+            "growthHours": 9.5,
+            "stress": 0.4
+          }
+        },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000002", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000003", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000004", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000005", "planting": null },
+        { "id": "1a2b3c4d-0000-4000-8000-000000000006", "planting": null }
+      ],
+      "glass": 2,
+      "size": 2,
+      "equipment": {
+        "heater": { "level": 1, "wear": 0.31 },
+        "co2": { "level": 1, "wear": 0.12 }
+      },
+      "setpoints": {
+        "heatTo": 24,
+        "ventAbove": 26,
+        "humidityMax": 85,
+        "humidityMin": 75,
+        "co2": 800,
+        "light": 500,
+        "water": 65,
+        "nutrients": 2.5
+      },
+      "computer": false,
+      "auto": false
+    }
+  ],
+  "storage": { "lots": [] },
+  "market": {
+    "swings": {
+      "microgreens": 1,
+      "cucumber": 1.08,
+      "strawberry": 0.97,
+      "tomato": 1.02,
+      "pepper": 0.95
+    }
+  }
+}

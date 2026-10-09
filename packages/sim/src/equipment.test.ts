@@ -10,8 +10,9 @@ import {
 } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import { greenhousePlan } from './climate';
+import { hourPrices } from './energy';
 import { installedDevice, serviceCost } from './equipment';
-import type { GameState } from './state';
+import type { GameState, Greenhouse } from './state';
 import {
   accept,
   equipped,
@@ -22,6 +23,12 @@ import {
   runTicks,
   withGreenhouse,
 } from './test-utils';
+import { planHour } from './tick';
+
+/** A greenhouse's plan for the first hour of the game. */
+function planOf(greenhouse: Greenhouse, content = defaultContent) {
+  return greenhousePlan(greenhouse, content, hourPrices(0, content));
+}
 
 /** A change this big shows on the climate badges. */
 const VISIBLE: Record<ClimateVariable, number> = {
@@ -161,7 +168,7 @@ describe('running costs', () => {
     let state = start;
     let costs = 0;
     for (let i = 0; i < 50; i++) {
-      costs += greenhousePlan(firstGreenhouse(state), defaultContent).cost;
+      costs += planHour(state, defaultContent).cost;
       state = runTicks(state, 1);
       expect(Number.isInteger(state.money)).toBe(true);
       expect(state.owed).toBeGreaterThanOrEqual(0);
@@ -188,8 +195,8 @@ describe('running costs', () => {
       size: 3,
       plots: [...g.plots, ...g.plots.map((p) => ({ ...p, id: `${p.id}-2` }))],
     }));
-    const smallPlan = greenhousePlan(firstGreenhouse(small), defaultContent);
-    const largePlan = greenhousePlan(firstGreenhouse(large), defaultContent);
+    const smallPlan = planOf(firstGreenhouse(small), defaultContent);
+    const largePlan = planOf(firstGreenhouse(large), defaultContent);
     expect(largePlan.balance).toEqual(smallPlan.balance);
     expect(largePlan.cost).toBeCloseTo(2 * smallPlan.cost, 12);
   });
@@ -255,14 +262,14 @@ describe('the climate computer', () => {
     const manual = equipped(['heater', 'co2', 'lights']);
     const auto = withGreenhouse(manual, () => ({ computer: true, auto: true }));
     expect(
-      greenhousePlan(firstGreenhouse(manual), defaultContent).cost,
+      planOf(firstGreenhouse(manual), defaultContent).cost,
     ).toBeGreaterThan(0);
-    expect(greenhousePlan(firstGreenhouse(auto), defaultContent).cost).toBe(0);
+    expect(planOf(firstGreenhouse(auto), defaultContent).cost).toBe(0);
 
     // A crop goes in: the computer gets to work.
     const planted = plant(auto, 'tomato');
     expect(
-      greenhousePlan(firstGreenhouse(planted), defaultContent).cost,
+      planOf(firstGreenhouse(planted), defaultContent).cost,
     ).toBeGreaterThan(0);
   });
 });

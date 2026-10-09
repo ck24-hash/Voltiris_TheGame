@@ -2,6 +2,8 @@ import { defaultContent, type GameContent } from '@voltiris/content';
 import { describe, expect, it } from 'vitest';
 import saveV1 from './fixtures/save-v1.json';
 import saveV2 from './fixtures/save-v2.json';
+import saveV3 from './fixtures/save-v3.json';
+import { initialEnergy } from './energy';
 import { initialMarket } from './market';
 import {
   migrateState,
@@ -125,6 +127,19 @@ describe('restoreGame', () => {
     expect(result.state.market.swings.strawberry).toBe(1.12);
   });
 
+  it('still loads a version 3 save, with just the grid', () => {
+    const result = restoreGame(saveV3, defaultContent);
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.fromVersion).toBe(3);
+    expect(result.state.version).toBe(STATE_VERSION);
+    expect(result.state.owed).toBe(0.375);
+    expect(result.state.greenhouses[0]?.equipment.heater).toEqual({
+      level: 1,
+      wear: 0.31,
+    });
+    expect(result.state.energy).toEqual(initialEnergy());
+  });
+
   it('drops unknown extra fields', () => {
     const withExtras = editedSave(['greenhouses', 0, 'plots', 0, 'extra'], 1);
     (withExtras as Record<string, unknown>).cheat = true;
@@ -199,6 +214,14 @@ describe('restoreGame', () => {
     [['greenhouses', 0, 'setpoints', 'co2'], 'high', 'a number'],
     [['greenhouses', 0, 'computer'], 'yes', 'true or false'],
     [['greenhouses', 0, 'auto'], true, 'false without a computer'],
+    [['energy'], REMOVE, 'an object'],
+    [['energy', 'solar'], -1, 'a number from 0 up'],
+    [['energy', 'chp'], 3, 'at most 2'],
+    [['energy', 'battery'], 0.5, 'a whole number'],
+    [['energy', 'stored'], 5, 'at most 0'],
+    [['energy', 'today'], null, 'an object'],
+    [['energy', 'today', 'bought'], -2, 'a number from 0 up'],
+    [['energy', 'yesterday'], 'Monday', 'an object'],
   ])('rejects a bad %j, naming the field', (path, value, expected) => {
     const result = restoreGame(editedSave(path, value), defaultContent);
     expect(result).toEqual({

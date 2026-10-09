@@ -167,10 +167,78 @@ export interface ClimatePhysicsConfig {
   readonly settle: Readonly<Record<AirVariable, number>>;
 }
 
-/** Energy prices, Volticoins per kWh. Power gets its own sources in Phase 7. */
-export interface EnergyPricesConfig {
-  readonly gas: number;
+/** A band of the grid's tariff: from `from` o'clock until the next band starts. */
+export interface TariffBand {
+  readonly name: string;
+  readonly from: number;
+  /** Volticoins per kWh. */
+  readonly price: number;
+}
+
+export interface GridConfig {
+  /** From midnight; the last band runs until midnight. */
+  readonly tariff: readonly TariffBand[];
+  /** Price multiplier at the middle of each season; it changes gradually in between. */
+  readonly seasonal: Readonly<Record<Season, number>>;
+  /** Selling spare power pays this share of the buying price. */
+  readonly sellShare: number;
+}
+
+/**
+ * When the sun is up for the solar panels: none before `rise` or after
+ * `set`, most at midday. The greenhouse keeps a steady light until weather
+ * and seasons arrive (Phase 10).
+ */
+export interface SunConfig {
+  readonly rise: number;
+  readonly set: number;
+}
+
+export const ENERGY_ASSETS = ['solar', 'battery', 'chp'] as const;
+
+export type EnergyAsset = (typeof ENERGY_ASSETS)[number];
+
+export interface SolarLevel {
+  readonly name: string;
+  readonly price: number;
+  /** Output at midday, kW. */
+  readonly peak: number;
+}
+
+export interface BatteryLevel {
+  readonly name: string;
+  readonly price: number;
+  /** kWh it holds. */
+  readonly capacity: number;
+  /** Fastest it charges or discharges, kW. */
+  readonly rate: number;
+  /** Share of the power put in that comes back out. */
+  readonly efficiency: number;
+}
+
+/** A combined heat and power unit: an engine that makes power, heat and CO₂. */
+export interface ChpLevel {
+  readonly name: string;
+  readonly price: number;
+  readonly fuel: 'gas' | 'biogas';
+  /** Fuel it burns when running, kW. */
+  readonly input: number;
+  /** Power it makes, kW. */
   readonly power: number;
+  /** Heat it gives the greenhouse heaters, kW. */
+  readonly heat: number;
+  /** CO₂ from its cleaned exhaust per hour, for the injectors (as a dose). */
+  readonly co2: number;
+}
+
+export interface EnergyConfig {
+  /** Volticoins per kWh of fuel. */
+  readonly prices: { readonly gas: number; readonly biogas: number };
+  readonly grid: GridConfig;
+  readonly sun: SunConfig;
+  readonly solar: readonly SolarLevel[];
+  readonly battery: readonly BatteryLevel[];
+  readonly chp: readonly ChpLevel[];
 }
 
 /** Glass and size come in levels; a new greenhouse starts at level 1 of each. */
@@ -349,7 +417,7 @@ export interface GameContent {
   readonly market: MarketConfig;
   readonly greenhouse: GreenhouseConfig;
   readonly physics: ClimatePhysicsConfig;
-  readonly energyPrices: EnergyPricesConfig;
+  readonly energy: EnergyConfig;
   readonly equipment: EquipmentConfig;
   readonly control: ControlConfig;
 }

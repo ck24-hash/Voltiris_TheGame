@@ -6,6 +6,7 @@ import type {
   Setpoints,
 } from '@voltiris/content';
 import { controlSetpoints } from './control';
+import type { Co2Demand, HeatDemand, HourPrices } from './energy';
 import { glassOf, installedDevice } from './equipment';
 import { growthRate } from './growth';
 import type { Greenhouse } from './state';
@@ -46,7 +47,10 @@ export function plantActivity(
 export interface DeviceRun {
   /** How hard it works this hour: 0 is idle, 1 flat out. */
   readonly load: number;
-  /** What it costs this hour in energy and supplies, Volticoins. */
+  /**
+   * What it costs this hour in energy and supplies at this hour's prices,
+   * Volticoins: before solar, the battery and the CHP cut the bill.
+   */
   readonly cost: number;
 }
 
@@ -63,10 +67,15 @@ export interface ClimatePlan {
    * topped up by fertigation.
    */
   readonly substrate: { readonly water: number; readonly nutrients: number };
-  /** Energy for the whole greenhouse this hour, kWh. */
+  /** Energy for the whole greenhouse this hour, kWh: heater gas, and power. */
   readonly gas: number;
   readonly power: number;
-  /** Running costs this hour, Volticoins. */
+  /** What the heater gives and the injector doses, for the energy system. */
+  readonly heat: HeatDemand | null;
+  readonly co2: Co2Demand | null;
+  /** Water and fertilizer this hour, Volticoins. */
+  readonly supplies: number;
+  /** Running costs this hour at this hour's prices (see `DeviceRun.cost`). */
   readonly cost: number;
 }
 
@@ -83,9 +92,10 @@ export function planClimate(
   greenhouse: Greenhouse,
   activity: PlantActivity,
   content: GameContent,
+  prices: HourPrices,
   running = true,
 ): ClimatePlan {
-  const { physics, energyPrices: prices } = content;
+  const { physics } = content;
   const outside = physics.outside;
   const plots = greenhouse.plots.length;
   const glass = glassOf(greenhouse, content);
@@ -184,41 +194,46 @@ export function planClimate(
   const devices: Partial<Record<EquipmentKind, DeviceRun>> = {};
   let gas = 0;
   let power = 0;
+  let supplies = 0;
+  let heatDemand: HeatDemand | null = null;
+  let co2Demand: Co2Demand | null = null;
   if (heater) {
-    const used = (heat * plots) / heater.level.efficiency;
-    const isGas = heater.level.fuel === 'gas';
-    if (isGas) gas += used;
+    const { fuel, efficiency } = heater.level;
+    const kwh = heat * plots;
+    const used = kwh / efficiency;
+    if (fuel === 'gas') gas += used;
     else power += used;
+    heatDemand = { kwh, fuel, efficiency };
     devices.heater = {
       load: heat / heaterMax,
-      cost: used * (isGas ? prices.gas : prices.power),
+      cost: used * (fuel === 'gas' ? prices.gas : prices.buy),
     };
   }
   if (vents) {
     const load = ventAir / ventsMax;
     const fans = vents.level.power * load * plots;
     power += fans;
-    devices.vents = { load, cost: fans * prices.power };
+    devices.vents = { load, cost: fans * prices.buy };
   }
   if (fogger) {
     const load = fog / foggerMax;
     const pump = fogger.level.power * load * plots;
+    const water = fog * plots * fogger.level.waterCost;
     power += pump;
-    devices.fogger = {
-      load,
-      cost: pump * prices.power + fog * plots * fogger.level.waterCost,
-    };
+    supplies += water;
+    devices.fogger = { load, cost: pump * prices.buy + water };
   }
   if (co2) {
+    co2Demand = { units: dose * plots, costPer1000: co2.level.costPer1000 };
     devices.co2 = {
       load: dose / doseMax,
-      cost: (dose * plots * co2.level.costPer1000) / 1000,
+      cost: (co2Demand.units * co2Demand.costPer1000) / 1000,
     };
   }
   if (lights) {
     const used = lamps * lights.level.powerPerPar * plots;
     power += used;
-    devices.lights = { load: lamps / lampsMax, cost: used * prices.power };
+    devices.lights = { load: lamps / lampsMax, cost: used * prices.buy };
   }
   if (fertigation) {
     const load = Math.max(
@@ -226,14 +241,12 @@ export function planClimate(
       refill.nutrients / nutrientsMax,
     );
     const pump = fertigation.level.power * load * plots;
+    const feed =
+      refill.water * fertigation.level.waterCost +
+      refill.nutrients * fertigation.level.nutrientCost;
     power += pump;
-    devices.fertigation = {
-      load,
-      cost:
-        pump * prices.power +
-        refill.water * fertigation.level.waterCost +
-        refill.nutrients * fertigation.level.nutrientCost,
-    };
+    supplies += feed;
+    devices.fertigation = { load, cost: pump * prices.buy + feed };
   }
 
   return {
@@ -252,6 +265,9 @@ export function planClimate(
     substrate,
     gas,
     power,
+    heat: heatDemand,
+    co2: co2Demand,
+    supplies,
     cost: Object.values(devices).reduce((sum, run) => sum + run.cost, 0),
   };
 }
@@ -282,10 +298,16 @@ export function nextClimate(
   };
 }
 
-/** The plan the next tick runs for a greenhouse, as it stands now. */
+/** A greenhouse's plan for an hour with these prices, as it stands now. */
 export function greenhousePlan(
   greenhouse: Greenhouse,
   content: GameContent,
+  prices: HourPrices,
 ): ClimatePlan {
-  return planClimate(greenhouse, plantActivity(greenhouse, content), content);
+  return planClimate(
+    greenhouse,
+    plantActivity(greenhouse, content),
+    content,
+    prices,
+  );
 }

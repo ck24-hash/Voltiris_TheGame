@@ -99,6 +99,14 @@ export function equipped(
   }));
 }
 
+/** Sets the energy system directly. */
+export function withEnergy(
+  state: GameState,
+  change: Partial<GameState['energy']>,
+): GameState {
+  return { ...state, energy: { ...state.energy, ...change } };
+}
+
 /** Buys (or upgrades) a device for the first greenhouse; throws if refused. */
 export function buy(
   state: GameState,
