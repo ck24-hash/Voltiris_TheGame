@@ -96,6 +96,9 @@ test('opens the game modes from the buildings on the map', async ({
 test('plants, harvests and sells for a profit within minutes', async ({
   page,
 }, info) => {
+  // With the clock installed, WebKit on Linux takes its time to settle each
+  // button before a tap; this test has many taps.
+  test.slow();
   await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
   await openGame(page);
   await tap(page, plotOnScreen(page, 0));
@@ -136,6 +139,8 @@ test('plants, harvests and sells for a profit within minutes', async ({
 test('buys a heater, and the greenhouse warms up for the cucumbers', async ({
   page,
 }, info) => {
+  // Many taps with the clock installed: see the harvest test above.
+  test.slow();
   await page.clock.install({ time: new Date('2026-10-08T10:00:00Z') });
   await openGame(page);
   await tap(page, plotOnScreen(page, 0));

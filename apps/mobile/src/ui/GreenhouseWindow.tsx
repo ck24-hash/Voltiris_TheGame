@@ -37,6 +37,9 @@ const TABS = [
 
 type Tab = (typeof TABS)[number]['id'];
 
+/** Wear worth a service: below it, the button would only clutter the row. */
+const SERVICE_FROM = 0.05;
+
 /**
  * The greenhouse: buy and upgrade equipment, set the climate targets it
  * works to, and upgrade the greenhouse itself.
@@ -156,7 +159,10 @@ function EquipmentRow({
   const device = greenhouse.equipment[kind];
   const current = device ? levels[device.level - 1] : undefined;
   const next = levels[device?.level ?? 0];
-  const service = device ? serviceCost(kind, device, content) : 0;
+  const service =
+    device && device.wear >= SERVICE_FROM
+      ? serviceCost(kind, device, content)
+      : 0;
 
   return (
     <li className={styles.row}>
@@ -179,7 +185,7 @@ function EquipmentRow({
                   {formatPerDay(run.cost)} a day
                 </>
               )}
-              {device.wear > 0 && ` · Wear ${formatPercent(device.wear)}`}
+              {device.wear >= 0.01 && ` · Wear ${formatPercent(device.wear)}`}
             </span>
           </>
         ) : (

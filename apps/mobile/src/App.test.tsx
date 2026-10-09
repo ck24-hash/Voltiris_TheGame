@@ -486,6 +486,22 @@ describe('greenhouse', () => {
     expect(screen.getByLabelText('481 Volticoins')).toBeDefined();
   });
 
+  it('keeps quiet about a little wear', () => {
+    const { store } = renderApp();
+    act(() =>
+      store.getState().replaceGame(
+        withGreenhouse(store.getState().game, {
+          equipment: { heater: { level: 1, wear: 0.004 } },
+        }),
+      ),
+    );
+    const window = openGreenhouse(store);
+    expect(within(window).queryByText(/Wear/)).toBeNull();
+    expect(
+      within(window).queryByRole('button', { name: /^Service/ }),
+    ).toBeNull();
+  });
+
   it('says when the equipment is off for want of money', () => {
     const { store } = renderApp();
     act(() =>
